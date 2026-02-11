@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/keurnel/assembler/cmd/x86_64/internal/asm"
+	asm2 "github.com/keurnel/assembler/architecture/x86_64/internal/asm"
 )
 
 // Assembler represents the x86_64 assembler
@@ -80,8 +80,8 @@ func (a *Assembler) ParseLine(lineNum int, line string) (*ParsedInstruction, err
 }
 
 // ParseRegister parses a register operand
-func ParseRegister(operand string) (asm.Register, bool) {
-	reg, exists := asm.RegistersByName[strings.ToLower(operand)]
+func ParseRegister(operand string) (asm2.Register, bool) {
+	reg, exists := asm2.RegistersByName[strings.ToLower(operand)]
 	return reg, exists
 }
 
@@ -140,13 +140,13 @@ func (a *Assembler) AssembleInstruction(instr *ParsedInstruction) error {
 	}
 
 	// Lookup instruction
-	instruction, exists := asm.InstructionsByMnemonic[instr.Mnemonic]
+	instruction, exists := asm2.InstructionsByMnemonic[instr.Mnemonic]
 	if !exists {
 		return fmt.Errorf("line %d: unknown instruction: %s", instr.Line, instr.Mnemonic)
 	}
 
 	// Find matching instruction form
-	var matchedForm *asm.InstructionForm
+	var matchedForm *asm2.InstructionForm
 	var operandValues []interface{}
 
 	for i := range instruction.Forms {
@@ -154,7 +154,7 @@ func (a *Assembler) AssembleInstruction(instr *ParsedInstruction) error {
 
 		// Check if operand count matches
 		expectedOps := len(form.Operands)
-		if form.Operands[0] == asm.OperandNone {
+		if form.Operands[0] == asm2.OperandNone {
 			expectedOps = 0
 		}
 
@@ -172,23 +172,23 @@ func (a *Assembler) AssembleInstruction(instr *ParsedInstruction) error {
 			// Try register
 			if reg, ok := ParseRegister(operand); ok {
 				switch expectedType {
-				case asm.OperandReg8:
-					if reg.Type == asm.Register8 {
+				case asm2.OperandReg8:
+					if reg.Type == asm2.Register8 {
 						operandValues[j] = reg
 						continue
 					}
-				case asm.OperandReg16:
-					if reg.Type == asm.Register16 {
+				case asm2.OperandReg16:
+					if reg.Type == asm2.Register16 {
 						operandValues[j] = reg
 						continue
 					}
-				case asm.OperandReg32:
-					if reg.Type == asm.Register32 {
+				case asm2.OperandReg32:
+					if reg.Type == asm2.Register32 {
 						operandValues[j] = reg
 						continue
 					}
-				case asm.OperandReg64:
-					if reg.Type == asm.Register64 {
+				case asm2.OperandReg64:
+					if reg.Type == asm2.Register64 {
 						operandValues[j] = reg
 						continue
 					}
@@ -198,25 +198,25 @@ func (a *Assembler) AssembleInstruction(instr *ParsedInstruction) error {
 			// Try immediate
 			if imm, ok := ParseImmediate(operand); ok {
 				switch expectedType {
-				case asm.OperandImm8:
+				case asm2.OperandImm8:
 					if imm >= -128 && imm <= 255 {
 						operandValues[j] = int8(imm)
 						continue
 					}
-				case asm.OperandImm16:
+				case asm2.OperandImm16:
 					if imm >= -32768 && imm <= 65535 {
 						operandValues[j] = int16(imm)
 						continue
 					}
-				case asm.OperandImm32:
+				case asm2.OperandImm32:
 					if imm >= -2147483648 && imm <= 4294967295 {
 						operandValues[j] = int32(imm)
 						continue
 					}
-				case asm.OperandImm64:
+				case asm2.OperandImm64:
 					operandValues[j] = imm
 					continue
-				case asm.OperandRel8, asm.OperandRel32:
+				case asm2.OperandRel8, asm2.OperandRel32:
 					operandValues[j] = int32(imm)
 					continue
 				}
@@ -225,11 +225,11 @@ func (a *Assembler) AssembleInstruction(instr *ParsedInstruction) error {
 			// Try label reference (for jumps/calls)
 			if IsLabel(operand) {
 				switch expectedType {
-				case asm.OperandRel8:
+				case asm2.OperandRel8:
 					// Use placeholder - will be resolved later
 					operandValues[j] = "label:" + operand
 					continue
-				case asm.OperandRel32:
+				case asm2.OperandRel32:
 					// Use placeholder - will be resolved later
 					operandValues[j] = "label:" + operand
 					continue
@@ -265,15 +265,15 @@ func (a *Assembler) AssembleInstruction(instr *ParsedInstruction) error {
 	// Add ModR/M byte if needed
 	if matchedForm.ModRM {
 		if len(operandValues) >= 2 {
-			reg1, ok1 := operandValues[0].(asm.Register)
-			reg2, ok2 := operandValues[1].(asm.Register)
+			reg1, ok1 := operandValues[0].(asm2.Register)
+			reg2, ok2 := operandValues[1].(asm2.Register)
 			if ok1 && ok2 {
 				// Register to register
 				modrm := EncodeModRM(0b11, reg2.Encoding, reg1.Encoding)
 				code = append(code, modrm)
 			}
 		} else if len(operandValues) >= 1 {
-			reg, ok := operandValues[0].(asm.Register)
+			reg, ok := operandValues[0].(asm2.Register)
 			if ok {
 				// Single register operand (e.g., MUL, DIV, INC, DEC)
 				// Use opcode extension in reg field
@@ -321,9 +321,9 @@ func (a *Assembler) AssembleInstruction(instr *ParsedInstruction) error {
 		// Find the immediate operand
 		var immValue interface{}
 		for i, opType := range matchedForm.Operands {
-			if opType == asm.OperandImm8 || opType == asm.OperandImm16 ||
-				opType == asm.OperandImm32 || opType == asm.OperandImm64 ||
-				opType == asm.OperandRel8 || opType == asm.OperandRel32 {
+			if opType == asm2.OperandImm8 || opType == asm2.OperandImm16 ||
+				opType == asm2.OperandImm32 || opType == asm2.OperandImm64 ||
+				opType == asm2.OperandRel8 || opType == asm2.OperandRel32 {
 				if i < len(operandValues) {
 					immValue = operandValues[i]
 					break

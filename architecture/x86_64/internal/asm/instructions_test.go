@@ -3,7 +3,7 @@ package asm_test
 import (
 	"testing"
 
-	"github.com/keurnel/assembler/cmd/x86_64/internal/asm"
+	"github.com/keurnel/assembler/architecture/x86_64/internal/asm"
 )
 
 // TestMOVInstruction tests the MOV instruction forms

@@ -3,7 +3,7 @@ package asm_test
 import (
 	"testing"
 
-	"github.com/keurnel/assembler/cmd/x86_64/internal/asm"
+	"github.com/keurnel/assembler/architecture/x86_64/internal/asm"
 )
 
 // TestRegister64Bit tests all 64-bit general purpose registers
