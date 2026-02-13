@@ -1,11 +1,10 @@
 package x86_64
 
 import (
-	"errors"
 	"os"
 
 	"github.com/keurnel/assembler/architecture/x86_64"
-	"github.com/keurnel/assembler/internal/asm"
+	"github.com/keurnel/assembler/internal/keurnel_asm"
 	"github.com/spf13/cobra"
 )
 
@@ -51,69 +50,75 @@ var AssembleFileCmd = &cobra.Command{
 
 		assemblerContext := x86_64.AssemblerNew(source)
 
-		// Print each instruction
-		instructions := assemblerContext.Instructions()
-		for mnemonic, instr := range instructions {
-			cmd.Printf("Instruction: %s\n", mnemonic)
-			for _, form := range instr.Forms {
-				cmd.Printf("  Form: Operands=%v, Opcode=%v, ModRM=%v, Imm=%v, Encoding=%v, REXPrefix=%v\n",
-					form.Operands, form.Opcode, form.ModRM, form.Imm, form.Encoding, form.REXPrefix)
-			}
-		}
+		// Assemble file using the assembler context.
+		//
+		binary, err := assembleFile(assemblerContext)
+
+		println(binary)
 
 		return
-
-		cmd.Printf("Assembling file: %s\n", fullPath)
-		machineCode, err := assembleFile(fullPath)
-		if err != nil {
-			cmd.PrintErrln("Error: Failed to assemble file:", err)
-			return
-		}
-
-		outputFile := assemblyFile + ".bin"
-		err = os.WriteFile(outputFile, []byte(machineCode), 0644)
-		if err != nil {
-			cmd.PrintErrln("Error: Failed to write output file:", err)
-			return
-		}
-
-		cmd.Printf("Successfully assembled %s to %s\n", assemblyFile, outputFile)
 	},
 }
 
-func assembleFile(filePath string) (string, error) {
+func assembleFile(ctx *x86_64.Assembler) (string, error) {
 
-	// Read content of singular assembly file
-	//
-	assembly, err := os.ReadFile(filePath)
-	if err != nil {
-		return "", err
+	lexer := keurnel_asm.LexerNew(ctx.RawSource())
+	lexer.Process()
+
+	parser := keurnel_asm.ParserNew(lexer)
+	parser.Parse()
+
+	// Print each group
+	for identifier, group := range parser.Groups() {
+		println("Group Identifier:", identifier)
+		println("Group Type:", group.Type)
+		println("Instructions:")
+		for _, instr := range group.Instructions {
+			println("  Mnemonic:", instr.Mnemonic)
+			println("  Operands:")
+			for _, operand := range instr.Operands {
+				println("    -", operand)
+			}
+		}
+		println()
 	}
 
-	// When the assembly file is empty, return an error
-	// indicating that the assembly file is empty and
-	// cannot be assembled.
-	//
-	if len(assembly) == 0 {
-		return "", errors.New("Assemble error: Assembly file is empty")
-	}
-
-	// Perform pre-processing steps on the assembly code
-	//
-	source := asm.PreProcessingRemoveComments(string(assembly))
-	source = asm.PreProcessingTrimWhitespace(source)
-	source = asm.PreProcessingRemoveEmptyLines(source)
-
-	// Assemble the pre-processed assembly code into machine code using
-	// the x86_64 assembler.
-	//
-	assembler := x86_64.New(source)
-	machineCode, err := assembler.Assemble()
-	if err != nil {
-		return "", err
-	}
-
-	// Return the assembled machine code as a string.
-	//
-	return string(machineCode), nil
+	return "", nil
 }
+
+//func assembleFile(filePath string) (string, error) {
+//
+//	// Read content of singular assembly file
+//	//
+//	assembly, err := os.ReadFile(filePath)
+//	if err != nil {
+//		return "", err
+//	}
+//
+//	// When the assembly file is empty, return an error
+//	// indicating that the assembly file is empty and
+//	// cannot be assembled.
+//	//
+//	if len(assembly) == 0 {
+//		return "", errors.New("Assemble error: Assembly file is empty")
+//	}
+//
+//	// Perform pre-processing steps on the assembly code
+//	//
+//	source := asm.PreProcessingRemoveComments(string(assembly))
+//	source = asm.PreProcessingTrimWhitespace(source)
+//	source = asm.PreProcessingRemoveEmptyLines(source)
+//
+//	// Assemble the pre-processed assembly code into machine code using
+//	// the x86_64 assembler.
+//	//
+//	assembler := x86_64.New(source)
+//	machineCode, err := assembler.Assemble()
+//	if err != nil {
+//		return "", err
+//	}
+//
+//	// Return the assembled machine code as a string.
+//	//
+//	return string(machineCode), nil
+//}

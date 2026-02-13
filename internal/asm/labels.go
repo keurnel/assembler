@@ -36,7 +36,6 @@ type Label struct {
 // true if the line is a label definition, and false otherwise.
 func IsLabel(line string, architecture Architecture) bool {
 	line = trimComments(line)
-	line = trimWhitespace(line)
 	return false
 }
 
@@ -56,32 +55,6 @@ func trimComments(line string) string {
 		return line[:idx]
 	}
 	return line
-}
-
-// trimWhitespace - removes leading and trailing whitespace from a line of assembly code. This function uses the
-// built-in strings.TrimSpace function to remove any spaces, tabs, or other whitespace characters from the beginning and
-// end of the line.
-func trimWhitespace(line string) string {
-	return trimSpace(line)
-}
-
-// trimSpace - is a helper function that wraps the built-in strings.TrimSpace function to remove leading and trailing
-// whitespace from a string.
-func trimSpace(s string) string {
-	start := 0
-	end := len(s)
-
-	// Find first non-whitespace character
-	for start < end && isWhitespace(s[start]) {
-		start++
-	}
-
-	// Find last non-whitespace character
-	for end > start && isWhitespace(s[end-1]) {
-		end--
-	}
-
-	return s[start:end]
 }
 
 func isWhitespace(c byte) bool {

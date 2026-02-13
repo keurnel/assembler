@@ -23,7 +23,17 @@ func (a *Assembler) ArchitectureName() string {
 
 // Instructions - returns the parsed assembly instructions
 func (a *Assembler) Instructions() map[string]asm.Instruction {
-	return map[string]asm.Instruction{}
+
+	return map[string]asm.Instruction{
+		"MOV":   MOV,
+		"MOVZX": MOVZX,
+		"MOVSX": MOVSX,
+		"LEA":   LEA,
+		"PUSH":  PUSH,
+		"POP":   POP,
+		"ADD":   ADD,
+		"XCHG":  XCHG,
+	}
 }
 
 // IsInstruction - checks if a given line of assembly code is a valid instruction for the architecture

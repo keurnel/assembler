@@ -35,61 +35,98 @@ var (
 			{Operands: []asm.OperandType{OperandReg32, OperandReg16}, Opcode: []byte{0x0F, 0xB7}, ModRM: true, Encoding: EncodingLegacy},
 		},
 	}
+
+	MOVSX = asm.Instruction{
+		Mnemonic: "MOVSX",
+		Forms: []asm.InstructionForm{
+			// MOVSX r32, r8
+			{Operands: []asm.OperandType{OperandReg32, OperandReg8}, Opcode: []byte{0x0F, 0xBE}, ModRM: true, Encoding: EncodingLegacy},
+			// MOVSX r32, r16
+			{Operands: []asm.OperandType{OperandReg32, OperandReg16}, Opcode: []byte{0x0F, 0xBF}, ModRM: true, Encoding: EncodingLegacy},
+		},
+	}
+
+	LEA = asm.Instruction{
+		Mnemonic: "LEA",
+		Forms: []asm.InstructionForm{
+			// LEA r32, m
+			{Operands: []asm.OperandType{OperandReg32, OperandMem}, Opcode: []byte{0x8D}, ModRM: true, Encoding: EncodingLegacy},
+			// LEA r64, m
+			{Operands: []asm.OperandType{OperandReg64, OperandMem}, Opcode: []byte{0x8D}, ModRM: true, Encoding: EncodingLegacy, REXPrefix: 0x48},
+		},
+	}
+
+	PUSH = asm.Instruction{
+		Mnemonic: "PUSH",
+		Forms: []asm.InstructionForm{
+			// PUSH r64
+			{Operands: []asm.OperandType{OperandReg64}, Opcode: []byte{0x50}, Encoding: EncodingLegacy},
+			// PUSH imm8
+			{Operands: []asm.OperandType{OperandImm8}, Opcode: []byte{0x6A}, Imm: true, Encoding: EncodingLegacy},
+			// PUSH imm32
+			{Operands: []asm.OperandType{OperandImm32}, Opcode: []byte{0x68}, Imm: true, Encoding: EncodingLegacy},
+			// PUSH r/m64
+			{Operands: []asm.OperandType{OperandMem}, Opcode: []byte{0xFF}, ModRM: true, Encoding: EncodingLegacy, REXPrefix: 0x48},
+		},
+	}
+
+	POP = asm.Instruction{
+		Mnemonic: "POP",
+		Forms: []asm.InstructionForm{
+			// POP r64
+			{Operands: []asm.OperandType{OperandReg64}, Opcode: []byte{0x58}, Encoding: EncodingLegacy},
+		},
+	}
+
+	ADD = asm.Instruction{
+		Mnemonic: "ADD",
+		Forms: []asm.InstructionForm{
+			// ADD r8, r8
+			{Operands: []asm.OperandType{OperandReg8, OperandReg8}, Opcode: []byte{0x00}, ModRM: true, Encoding: EncodingLegacy},
+			// ADD r32, r32
+			{Operands: []asm.OperandType{OperandReg32, OperandReg32}, Opcode: []byte{0x01}, ModRM: true, Encoding: EncodingLegacy},
+			// ADD r64, r64
+			{Operands: []asm.OperandType{OperandReg64, OperandReg64}, Opcode: []byte{0x01}, ModRM: true, Encoding: EncodingLegacy, REXPrefix: 0x48},
+			// ADD r32, imm32
+			{Operands: []asm.OperandType{OperandReg32, OperandImm32}, Opcode: []byte{0x81}, ModRM: true, Imm: true, Encoding: EncodingLegacy},
+			// ADD r64, imm32
+			{Operands: []asm.OperandType{OperandReg64, OperandImm32}, Opcode: []byte{0x81}, ModRM: true, Imm: true, Encoding: EncodingLegacy, REXPrefix: 0x48},
+		},
+	}
+
+	XCHG = asm.Instruction{
+		Mnemonic: "XCHG",
+		Forms: []asm.InstructionForm{
+			// XCHG r8, r8
+			{Operands: []asm.OperandType{OperandReg8, OperandReg8}, Opcode: []byte{0x86}, ModRM: true, Encoding: EncodingLegacy},
+			// XCHG r32, r32
+			{Operands: []asm.OperandType{OperandReg32, OperandReg32}, Opcode: []byte{0x87}, ModRM: true, Encoding: EncodingLegacy},
+			// XCHG r64, r64
+			{Operands: []asm.OperandType{OperandReg64, OperandReg64}, Opcode: []byte{0x87}, ModRM: true, Encoding: EncodingLegacy, REXPrefix: 0x48},
+		},
+	}
+
+	//
+	// Arithmetic Instructions
+	//
+
+	//
+	// Logical Instructions
+	//
+
+	//
+	// Shift and Rotate Instructions
+	//
+
+	//
+	// Control Flow Instructions
+	//
+
+	//
+	// Miscellaneous Instructions
+	//
 )
 
-//	MOVSX = Instruction{
-//		Mnemonic: "MOVSX",
-//		Forms: []InstructionForm{
-//			// MOVSX r32, r8
-//			{Operands: []OperandType{OperandReg32, OperandReg8}, Opcode: []byte{0x0F, 0xBE}, ModRM: true, Encoding: EncodingLegacy},
-//			// MOVSX r32, r16
-//			{Operands: []OperandType{OperandReg32, OperandReg16}, Opcode: []byte{0x0F, 0xBF}, ModRM: true, Encoding: EncodingLegacy},
-//		},
-//	}
-//
-//	LEA = Instruction{
-//		Mnemonic: "LEA",
-//		Forms: []InstructionForm{
-//			// LEA r32, m
-//			{Operands: []OperandType{OperandReg32, OperandMem}, Opcode: []byte{0x8D}, ModRM: true, Encoding: EncodingLegacy},
-//			// LEA r64, m
-//			{Operands: []OperandType{OperandReg64, OperandMem}, Opcode: []byte{0x8D}, ModRM: true, Encoding: EncodingLegacy, REXPrefix: 0x48},
-//		},
-//	}
-//
-//	PUSH = Instruction{
-//		Mnemonic: "PUSH",
-//		Forms: []InstructionForm{
-//			// PUSH r64
-//			{Operands: []OperandType{OperandReg64}, Opcode: []byte{0x50}, Encoding: EncodingLegacy},
-//			// PUSH imm8
-//			{Operands: []OperandType{OperandImm8}, Opcode: []byte{0x6A}, Imm: true, Encoding: EncodingLegacy},
-//			// PUSH imm32
-//			{Operands: []OperandType{OperandImm32}, Opcode: []byte{0x68}, Imm: true, Encoding: EncodingLegacy},
-//		},
-//	}
-//
-//	POP = Instruction{
-//		Mnemonic: "POP",
-//		Forms: []InstructionForm{
-//			// POP r64
-//			{Operands: []OperandType{OperandReg64}, Opcode: []byte{0x58}, Encoding: EncodingLegacy},
-//		},
-//	}
-//
-//	XCHG = Instruction{
-//		Mnemonic: "XCHG",
-//		Forms: []InstructionForm{
-//			// XCHG r8, r8
-//			{Operands: []OperandType{OperandReg8, OperandReg8}, Opcode: []byte{0x86}, ModRM: true, Encoding: EncodingLegacy},
-//			// XCHG r32, r32
-//			{Operands: []OperandType{OperandReg32, OperandReg32}, Opcode: []byte{0x87}, ModRM: true, Encoding: EncodingLegacy},
-//			// XCHG r64, r64
-//			{Operands: []OperandType{OperandReg64, OperandReg64}, Opcode: []byte{0x87}, ModRM: true, Encoding: EncodingLegacy, REXPrefix: 0x48},
-//		},
-//	}
-//)
-//
 //// Arithmetic Instructions
 //var (
 //	ADD = Instruction{
