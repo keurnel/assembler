@@ -11,3 +11,8 @@ group:
     MOV CX, 0x9ABC ; Load the value 0x9ABC into the CX register.
     SUB CX, AX      ; Subtract the value in AX from CX, result
     ret
+
+; This is a third group.
+.another_group:
+    MOV DX, 0xDEF0 ; Load the value 0xDEF0 into the DX register.
+    ret
