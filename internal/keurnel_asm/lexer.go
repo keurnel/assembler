@@ -14,6 +14,7 @@ const (
 	DIRECTIVE TokenType = "DIRECTIVE" // e.g., .data, .text, etc.
 	LABEL     TokenType = "LABEL"     // e.g., main:, loop:, etc.
 	NAMESPACE TokenType = "NAMESPACE" // e.g., namespace my_namespace { ... }
+	USE       TokenType = "USE"       // e.g., use my_namespace
 
 	// Symbols
 

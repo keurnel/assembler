@@ -1,0 +1,37 @@
+; Keurnel Assembly X86_64
+;
+use math
+
+_start:
+    ; Entry point of the program
+    math._add(5, 3)
+    math._subtract(10, 4)
+
+namespace math
+
+    _start:
+        mov 0, rdi
+        mov 1, rsi
+        call _add
+        ret
+
+    _add:
+        ; rdi = a, rsi = b
+        mov rax, rdi
+        add rax, rsi
+        ret
+
+    _subtract:
+        ; rdi = a, rsi = b
+        mov rax, rdi
+        sub rax, rsi
+        ret
+
+
+namespace lifecycle
+
+    _start:
+        ; Do nothing.
+        ret
+
+

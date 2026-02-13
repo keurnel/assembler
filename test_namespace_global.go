@@ -9,7 +9,7 @@ import (
 
 func main() {
 	// Read the file
-	content, err := ioutil.ReadFile("main.asm")
+	content, err := ioutil.ReadFile("main.kasm")
 	if err != nil {
 		panic(err)
 	}
