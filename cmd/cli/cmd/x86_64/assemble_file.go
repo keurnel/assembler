@@ -40,6 +40,29 @@ var AssembleFileCmd = &cobra.Command{
 			return
 		}
 
+		// Read the raw assembly source code from the specified file and create a new instance of the x86_64 assembler
+		//
+		sourceBytes, err := os.ReadFile(fullPath)
+		if err != nil {
+			cmd.PrintErrln("Error: Failed to read assembly file:", err)
+			return
+		}
+		source := string(sourceBytes)
+
+		assemblerContext := x86_64.AssemblerNew(source)
+
+		// Print each instruction
+		instructions := assemblerContext.Instructions()
+		for mnemonic, instr := range instructions {
+			cmd.Printf("Instruction: %s\n", mnemonic)
+			for _, form := range instr.Forms {
+				cmd.Printf("  Form: Operands=%v, Opcode=%v, ModRM=%v, Imm=%v, Encoding=%v, REXPrefix=%v\n",
+					form.Operands, form.Opcode, form.ModRM, form.Imm, form.Encoding, form.REXPrefix)
+			}
+		}
+
+		return
+
 		cmd.Printf("Assembling file: %s\n", fullPath)
 		machineCode, err := assembleFile(fullPath)
 		if err != nil {

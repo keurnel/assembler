@@ -1,16 +1,9 @@
 package x86_64
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
-
-	"github.com/keurnel/assembler/architecture/x86_64/internal/asm"
 )
-
-type Assembler struct {
-	rawSource string
-}
 
 // ParsedInstruction represents a parsed assembly instruction
 type ParsedInstruction struct {
@@ -26,11 +19,6 @@ func New(rawSource string) *Assembler {
 	return &Assembler{
 		rawSource: rawSource,
 	}
-}
-
-// RawSource - returns the raw assembly source code
-func (a *Assembler) RawSource() string {
-	return a.rawSource
 }
 
 // Assemble - assembles the raw assembly source code into machine code
@@ -125,8 +113,8 @@ func parseLine(lineNum int, line string) (*ParsedInstruction, error) {
 }
 
 // parseRegister parses a register operand
-func parseRegister(operand string) (asm.Register, bool) {
-	reg, exists := asm.RegistersByName[strings.ToLower(operand)]
+func parseRegister(operand string) (Register, bool) {
+	reg, exists := RegistersByName[strings.ToLower(operand)]
 	return reg, exists
 }
 
@@ -183,215 +171,215 @@ func assembleInstruction(instr *ParsedInstruction) error {
 		return nil
 	}
 
-	// Lookup instruction
-	instruction, exists := asm.InstructionsByMnemonic[instr.Mnemonic]
-	if !exists {
-		return fmt.Errorf("line %d: unknown instruction: %s", instr.Line, instr.Mnemonic)
-	}
-
-	// Find matching instruction form
-	var matchedForm *asm.InstructionForm
-	var operandValues []interface{}
-
-	for i := range instruction.Forms {
-		form := &instruction.Forms[i]
-
-		// Check if operand count matches
-		expectedOps := len(form.Operands)
-		if len(form.Operands) > 0 && form.Operands[0] == asm.OperandNone {
-			expectedOps = 0
-		}
-
-		if len(instr.Operands) != expectedOps {
-			continue
-		}
-
-		// Try to match operands
-		matched := true
-		operandValues = make([]interface{}, len(instr.Operands))
-
-		for j, operand := range instr.Operands {
-			expectedType := form.Operands[j]
-
-			// Try register
-			if reg, ok := parseRegister(operand); ok {
-				switch expectedType {
-				case asm.OperandReg8:
-					if reg.Type == asm.Register8 {
-						operandValues[j] = reg
-						continue
-					}
-				case asm.OperandReg16:
-					if reg.Type == asm.Register16 {
-						operandValues[j] = reg
-						continue
-					}
-				case asm.OperandReg32:
-					if reg.Type == asm.Register32 {
-						operandValues[j] = reg
-						continue
-					}
-				case asm.OperandReg64:
-					if reg.Type == asm.Register64 {
-						operandValues[j] = reg
-						continue
-					}
-				}
-			}
-
-			// Try immediate
-			if imm, ok := parseImmediate(operand); ok {
-				switch expectedType {
-				case asm.OperandImm8:
-					if imm >= -128 && imm <= 255 {
-						operandValues[j] = int8(imm)
-						continue
-					}
-				case asm.OperandImm16:
-					if imm >= -32768 && imm <= 65535 {
-						operandValues[j] = int16(imm)
-						continue
-					}
-				case asm.OperandImm32:
-					if imm >= -2147483648 && imm <= 4294967295 {
-						operandValues[j] = int32(imm)
-						continue
-					}
-				case asm.OperandImm64:
-					operandValues[j] = imm
-					continue
-				case asm.OperandRel8, asm.OperandRel32:
-					operandValues[j] = int32(imm)
-					continue
-				}
-			}
-
-			// Try label reference (for jumps/calls)
-			if isLabel(operand) {
-				switch expectedType {
-				case asm.OperandRel8:
-					operandValues[j] = "label:" + operand
-					continue
-				case asm.OperandRel32:
-					operandValues[j] = "label:" + operand
-					continue
-				}
-			}
-
-			matched = false
-			break
-		}
-
-		if matched {
-			matchedForm = form
-			break
-		}
-	}
-
-	if matchedForm == nil {
-		return fmt.Errorf("line %d: no matching form for %s with operands: %v",
-			instr.Line, instr.Mnemonic, instr.Operands)
-	}
-
-	// Generate machine code
-	var code []byte
-
-	// Add REX prefix if needed
-	if matchedForm.REXPrefix != 0 {
-		code = append(code, matchedForm.REXPrefix)
-	}
-
-	// Add opcode
-	code = append(code, matchedForm.Opcode...)
-
-	// Add ModR/M byte if needed
-	if matchedForm.ModRM {
-		if len(operandValues) >= 2 {
-			reg1, ok1 := operandValues[0].(asm.Register)
-			reg2, ok2 := operandValues[1].(asm.Register)
-			if ok1 && ok2 {
-				// Register to register
-				modrm := encodeModRM(0b11, reg2.Encoding, reg1.Encoding)
-				code = append(code, modrm)
-			}
-		} else if len(operandValues) >= 1 {
-			reg, ok := operandValues[0].(asm.Register)
-			if ok {
-				// Single register operand (e.g., MUL, DIV, INC, DEC)
-				var opcodeExt byte
-				switch instr.Mnemonic {
-				case "MUL":
-					opcodeExt = 4
-				case "IMUL":
-					opcodeExt = 5
-				case "DIV":
-					opcodeExt = 6
-				case "IDIV":
-					opcodeExt = 7
-				case "INC":
-					opcodeExt = 0
-				case "DEC":
-					opcodeExt = 1
-				case "NEG":
-					opcodeExt = 3
-				case "NOT":
-					opcodeExt = 2
-				case "SHL":
-					opcodeExt = 4
-				case "SHR":
-					opcodeExt = 5
-				case "SAR":
-					opcodeExt = 7
-				case "ROL":
-					opcodeExt = 0
-				case "ROR":
-					opcodeExt = 1
-				case "JMP":
-					opcodeExt = 4
-				case "CALL":
-					opcodeExt = 2
-				}
-				modrm := encodeModRM(0b11, opcodeExt, reg.Encoding)
-				code = append(code, modrm)
-			}
-		}
-	}
-
-	// Add immediate value if needed
-	if matchedForm.Imm && len(operandValues) > 0 {
-		// Find the immediate operand
-		var immValue interface{}
-		for i, opType := range matchedForm.Operands {
-			if opType == asm.OperandImm8 || opType == asm.OperandImm16 ||
-				opType == asm.OperandImm32 || opType == asm.OperandImm64 ||
-				opType == asm.OperandRel8 || opType == asm.OperandRel32 {
-				if i < len(operandValues) {
-					immValue = operandValues[i]
-					break
-				}
-			}
-		}
-
-		if immValue != nil {
-			switch v := immValue.(type) {
-			case int8:
-				code = append(code, byte(v))
-			case int16:
-				code = append(code, byte(v), byte(v>>8))
-			case int32:
-				code = append(code, byte(v), byte(v>>8), byte(v>>16), byte(v>>24))
-			case int64:
-				code = append(code, byte(v), byte(v>>8), byte(v>>16), byte(v>>24),
-					byte(v>>32), byte(v>>40), byte(v>>48), byte(v>>56))
-			case string:
-				// Label placeholder - encode as 0x00000000 for now
-				if strings.HasPrefix(v, "label:") {
-					code = append(code, 0x00, 0x00, 0x00, 0x00)
-				}
-			}
-		}
-	}
-
-	instr.MachineCode = code
+	//// Lookup instruction
+	//instruction, exists := asm2.InstructionsByMnemonic[instr.Mnemonic]
+	//if !exists {
+	//	return fmt.Errorf("line %d: unknown instruction: %s", instr.Line, instr.Mnemonic)
+	//}
+	//
+	//// Find matching instruction form
+	//var matchedForm *asm2.InstructionForm
+	//var operandValues []interface{}
+	//
+	//for i := range instruction.Forms {
+	//	form := &instruction.Forms[i]
+	//
+	//	// Check if operand count matches
+	//	expectedOps := len(form.Operands)
+	//	if len(form.Operands) > 0 && form.Operands[0] == asm2.OperandNone {
+	//		expectedOps = 0
+	//	}
+	//
+	//	if len(instr.Operands) != expectedOps {
+	//		continue
+	//	}
+	//
+	//	// Try to match operands
+	//	matched := true
+	//	operandValues = make([]interface{}, len(instr.Operands))
+	//
+	//	for j, operand := range instr.Operands {
+	//		expectedType := form.Operands[j]
+	//
+	//		// Try register
+	//		if reg, ok := parseRegister(operand); ok {
+	//			switch expectedType {
+	//			case asm2.OperandReg8:
+	//				if reg.Type == Register8 {
+	//					operandValues[j] = reg
+	//					continue
+	//				}
+	//			case asm2.OperandReg16:
+	//				if reg.Type == Register16 {
+	//					operandValues[j] = reg
+	//					continue
+	//				}
+	//			case asm2.OperandReg32:
+	//				if reg.Type == Register32 {
+	//					operandValues[j] = reg
+	//					continue
+	//				}
+	//			case asm2.OperandReg64:
+	//				if reg.Type == Register64 {
+	//					operandValues[j] = reg
+	//					continue
+	//				}
+	//			}
+	//		}
+	//
+	//		// Try immediate
+	//		if imm, ok := parseImmediate(operand); ok {
+	//			switch expectedType {
+	//			case asm2.OperandImm8:
+	//				if imm >= -128 && imm <= 255 {
+	//					operandValues[j] = int8(imm)
+	//					continue
+	//				}
+	//			case asm2.OperandImm16:
+	//				if imm >= -32768 && imm <= 65535 {
+	//					operandValues[j] = int16(imm)
+	//					continue
+	//				}
+	//			case asm2.OperandImm32:
+	//				if imm >= -2147483648 && imm <= 4294967295 {
+	//					operandValues[j] = int32(imm)
+	//					continue
+	//				}
+	//			case asm2.OperandImm64:
+	//				operandValues[j] = imm
+	//				continue
+	//			case asm2.OperandRel8, asm2.OperandRel32:
+	//				operandValues[j] = int32(imm)
+	//				continue
+	//			}
+	//		}
+	//
+	//		// Try label reference (for jumps/calls)
+	//		if isLabel(operand) {
+	//			switch expectedType {
+	//			case asm2.OperandRel8:
+	//				operandValues[j] = "label:" + operand
+	//				continue
+	//			case asm2.OperandRel32:
+	//				operandValues[j] = "label:" + operand
+	//				continue
+	//			}
+	//		}
+	//
+	//		matched = false
+	//		break
+	//	}
+	//
+	//	if matched {
+	//		matchedForm = form
+	//		break
+	//	}
+	//}
+	//
+	//if matchedForm == nil {
+	//	return fmt.Errorf("line %d: no matching form for %s with operands: %v",
+	//		instr.Line, instr.Mnemonic, instr.Operands)
+	//}
+	//
+	//// Generate machine code
+	//var code []byte
+	//
+	//// Add REX prefix if needed
+	//if matchedForm.REXPrefix != 0 {
+	//	code = append(code, matchedForm.REXPrefix)
+	//}
+	//
+	//// Add opcode
+	//code = append(code, matchedForm.Opcode...)
+	//
+	//// Add ModR/M byte if needed
+	//if matchedForm.ModRM {
+	//	if len(operandValues) >= 2 {
+	//		reg1, ok1 := operandValues[0].(Register)
+	//		reg2, ok2 := operandValues[1].(Register)
+	//		if ok1 && ok2 {
+	//			// Register to register
+	//			modrm := encodeModRM(0b11, reg2.Encoding, reg1.Encoding)
+	//			code = append(code, modrm)
+	//		}
+	//	} else if len(operandValues) >= 1 {
+	//		reg, ok := operandValues[0].(Register)
+	//		if ok {
+	//			// Single register operand (e.g., MUL, DIV, INC, DEC)
+	//			var opcodeExt byte
+	//			switch instr.Mnemonic {
+	//			case "MUL":
+	//				opcodeExt = 4
+	//			case "IMUL":
+	//				opcodeExt = 5
+	//			case "DIV":
+	//				opcodeExt = 6
+	//			case "IDIV":
+	//				opcodeExt = 7
+	//			case "INC":
+	//				opcodeExt = 0
+	//			case "DEC":
+	//				opcodeExt = 1
+	//			case "NEG":
+	//				opcodeExt = 3
+	//			case "NOT":
+	//				opcodeExt = 2
+	//			case "SHL":
+	//				opcodeExt = 4
+	//			case "SHR":
+	//				opcodeExt = 5
+	//			case "SAR":
+	//				opcodeExt = 7
+	//			case "ROL":
+	//				opcodeExt = 0
+	//			case "ROR":
+	//				opcodeExt = 1
+	//			case "JMP":
+	//				opcodeExt = 4
+	//			case "CALL":
+	//				opcodeExt = 2
+	//			}
+	//			modrm := encodeModRM(0b11, opcodeExt, reg.Encoding)
+	//			code = append(code, modrm)
+	//		}
+	//	}
+	//}
+	//
+	//// Add immediate value if needed
+	//if matchedForm.Imm && len(operandValues) > 0 {
+	//	// Find the immediate operand
+	//	var immValue interface{}
+	//	for i, opType := range matchedForm.Operands {
+	//		if opType == asm2.OperandImm8 || opType == asm2.OperandImm16 ||
+	//			opType == asm2.OperandImm32 || opType == asm2.OperandImm64 ||
+	//			opType == asm2.OperandRel8 || opType == asm2.OperandRel32 {
+	//			if i < len(operandValues) {
+	//				immValue = operandValues[i]
+	//				break
+	//			}
+	//		}
+	//	}
+	//
+	//	if immValue != nil {
+	//		switch v := immValue.(type) {
+	//		case int8:
+	//			code = append(code, byte(v))
+	//		case int16:
+	//			code = append(code, byte(v), byte(v>>8))
+	//		case int32:
+	//			code = append(code, byte(v), byte(v>>8), byte(v>>16), byte(v>>24))
+	//		case int64:
+	//			code = append(code, byte(v), byte(v>>8), byte(v>>16), byte(v>>24),
+	//				byte(v>>32), byte(v>>40), byte(v>>48), byte(v>>56))
+	//		case string:
+	//			// Label placeholder - encode as 0x00000000 for now
+	//			if strings.HasPrefix(v, "label:") {
+	//				code = append(code, 0x00, 0x00, 0x00, 0x00)
+	//			}
+	//		}
+	//	}
+	//}
+	//
+	//instr.MachineCode = code
 	return nil
 }

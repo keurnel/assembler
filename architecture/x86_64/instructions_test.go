@@ -1,9 +1,9 @@
-package asm_test
+package x86_64_test
 
 import (
 	"testing"
 
-	"github.com/keurnel/assembler/architecture/x86_64/internal/asm"
+	"github.com/keurnel/assembler/architecture/x86_64/asm"
 )
 
 // TestMOVInstruction tests the MOV instruction forms

@@ -1,4 +1,4 @@
-package asm
+package x86_64
 
 // RegisterType represents the type/size of a register
 type RegisterType int
