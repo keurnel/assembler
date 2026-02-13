@@ -3,6 +3,8 @@ package keurnel_asm
 const (
 	INSTRUCTION_GROUP_TYPE_DIRECTIVE = 0
 	INSTRUCTION_GROUP_TYPE_LABEL     = 1
+	INSTRUCTION_GROUP_TYPE_GLOBAL    = 2
+	INSTRUCTION_GROUP_TYPE_NAMESPACE = 3
 )
 
 type Parser struct {
@@ -43,8 +45,23 @@ func (p *Parser) Parse() {
 	tokens := p.lexer.Tokens()
 	i := 0
 
+	// Initialize global group for instructions not belonging to any label/directive
+	globalInstructions := []Instruction{}
+
 	for i < len(tokens) {
 		token := tokens[i]
+
+		// Handle namespace declarations
+		if token.Type == NAMESPACE {
+			group := InstructionGroup{
+				Type:         INSTRUCTION_GROUP_TYPE_NAMESPACE,
+				Identifier:   token.Literal,
+				Instructions: []Instruction{},
+			}
+			p.groups["namespace:"+token.Literal] = group
+			i++
+			continue
+		}
 
 		// When hitting directive or label, create a new instruction group and add it to the groups map.
 		if token.Type == DIRECTIVE || token.Type == LABEL {
@@ -92,7 +109,7 @@ func (p *Parser) Parse() {
 
 					group.Instructions = append(group.Instructions, instruction)
 
-					// Stop at `ret` instruction
+					// Stop at `ret` instruction and move to next token
 					if instruction.Mnemonic == "ret" {
 						break
 					}
@@ -103,9 +120,33 @@ func (p *Parser) Parse() {
 			}
 
 			p.groups[token.Literal] = group
+		} else if token.Type == INSTRUCTION {
+			// This is a global instruction (not in any label/directive)
+			instruction := Instruction{
+				Mnemonic: token.Literal,
+				Operands: []string{},
+			}
+
+			i++ // Move past the instruction token
+
+			// Collect all operands for this instruction
+			for i < len(tokens) && tokens[i].Type == OPERAND {
+				instruction.Operands = append(instruction.Operands, tokens[i].Literal)
+				i++
+			}
+
+			globalInstructions = append(globalInstructions, instruction)
 		} else {
 			i++
 		}
 	}
 
+	// Add global instructions group if any exist
+	if len(globalInstructions) > 0 {
+		p.groups["global"] = InstructionGroup{
+			Type:         INSTRUCTION_GROUP_TYPE_GLOBAL,
+			Identifier:   "global",
+			Instructions: globalInstructions,
+		}
+	}
 }

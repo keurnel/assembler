@@ -1,7 +1,5 @@
 package keurnel_asm
 
-import "fmt"
-
 type TokenType string
 
 const (
@@ -60,8 +58,6 @@ func (l *Lexer) Process() []Token {
 
 	l.readChar()
 
-	print("Value of ch: ", l.ch, "\n")
-
 	for l.ch != 0 {
 		l.skipWhitespace()
 
@@ -104,16 +100,24 @@ func (l *Lexer) Process() []Token {
 			// Otherwise, it's an instruction
 			l.tokens = append(l.tokens, l.readInstruction())
 
-			// Read operands after the instruction
-			l.skipWhitespace()
+			// Read operands after the instruction (until end of line)
+			for l.ch == ' ' || l.ch == '\t' {
+				l.readChar()
+			}
 			for l.ch != 0 && l.ch != SYMBOL_COMMENT_START && l.ch != '\n' {
 				if l.ch == ',' {
 					l.readChar()
-					l.skipWhitespace()
+					// Skip only spaces and tabs, not newlines
+					for l.ch == ' ' || l.ch == '\t' {
+						l.readChar()
+					}
 					continue
 				}
 				l.tokens = append(l.tokens, l.readOperand())
-				l.skipWhitespace()
+				// Skip only spaces and tabs after operand, not newlines
+				for l.ch == ' ' || l.ch == '\t' {
+					l.readChar()
+				}
 			}
 			continue
 		}
@@ -127,12 +131,6 @@ func (l *Lexer) Process() []Token {
 	// End of file token
 	//
 	l.tokens = append(l.tokens, Token{Type: EOF, Literal: ""})
-
-	// Print tokens
-	fmt.Println("Generated tokens:")
-	for _, token := range l.tokens {
-		fmt.Printf("Type: %s, Literal: '%s'\n", token.Type, token.Literal)
-	}
 
 	return l.tokens
 }
