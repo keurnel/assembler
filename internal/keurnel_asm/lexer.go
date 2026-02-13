@@ -15,8 +15,10 @@ const (
 	// Keurnel Assembly - directives and labels
 	DIRECTIVE TokenType = "DIRECTIVE" // e.g., .data, .text, etc.
 	LABEL     TokenType = "LABEL"     // e.g., main:, loop:, etc.
+	NAMESPACE TokenType = "NAMESPACE" // e.g., namespace my_namespace { ... }
 
 	// Symbols
+
 	SYMBOL_COMMENT_START byte = ';'  // Start of a comment
 	SYMBOL_COMMENT_END   byte = '\n' // End of a comment (newline)
 
@@ -87,6 +89,12 @@ func (l *Lexer) Process() []Token {
 		// Read instructions and operands
 		//
 		if l.isLetter(l.ch) {
+			// Check if this is a namespace declaration
+			if l.peekNamespace() {
+				l.tokens = append(l.tokens, l.readNamespace())
+				continue
+			}
+
 			// Check if this is a label (ends with ':')
 			if l.peekLabel() {
 				l.tokens = append(l.tokens, l.readLabel())
@@ -187,6 +195,24 @@ func (l *Lexer) peekLabel() bool {
 	return false
 }
 
+func (l *Lexer) peekNamespace() bool {
+	// Check if the current word is "namespace"
+	pos := l.position
+	keyword := "namespace"
+	for i := 0; i < len(keyword); i++ {
+		if pos >= len(l.input) || l.input[pos] != keyword[i] {
+			return false
+		}
+		pos++
+	}
+	// Make sure it's followed by whitespace or end of input
+	if pos < len(l.input) {
+		ch := l.input[pos]
+		return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r'
+	}
+	return true
+}
+
 func (l *Lexer) readLabel() Token {
 	start := l.position
 	for l.isLetter(l.ch) || (l.ch >= '0' && l.ch <= '9') || l.ch == '_' {
@@ -196,6 +222,25 @@ func (l *Lexer) readLabel() Token {
 		l.readChar()
 	}
 	return Token{Type: LABEL, Literal: l.input[start:l.position]}
+}
+
+func (l *Lexer) readNamespace() Token {
+	// Skip "namespace" keyword
+	for l.isLetter(l.ch) {
+		l.readChar()
+	}
+
+	// Skip whitespace after "namespace"
+	l.skipWhitespace()
+
+	// Read the namespace name
+	start := l.position
+	for l.isLetter(l.ch) || (l.ch >= '0' && l.ch <= '9') || l.ch == '_' {
+		l.readChar()
+	}
+
+	namespaceName := l.input[start:l.position]
+	return Token{Type: NAMESPACE, Literal: namespaceName}
 }
 
 func (l *Lexer) readInstruction() Token {

@@ -1,3 +1,5 @@
+namespace my_namespace
+
 ; This is a simple comment.
 .start:
     ; Entry-point of the program.
@@ -16,3 +18,6 @@ group:
 .another_group:
     MOV DX, 0xDEF0 ; Load the value 0xDEF0 into the DX register.
     ret
+
+
+MOV AX, 0x1111 ; Load the value 0x1111 into the AX register.
