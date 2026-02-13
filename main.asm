@@ -1,6 +1,11 @@
+; Global start directive.
+.start:
+    MOV AX, 0x0000 ; Load the value 0x0000 into the AX register.
+    ret
+
 namespace my_namespace
 
-; This is a simple comment.
+; Namespace specific start directive.
 .start:
     ; Entry-point of the program.
     MOV AX, 0x1234 ; Load the value 0x1234 into the AX register.
@@ -21,3 +26,12 @@ group:
 
 
 MOV AX, 0x1111 ; Load the value 0x1111 into the AX register.
+
+namespace another_namespace
+
+; Another namespace specific start directive.
+.start:
+    MOV AX, 0x2222 ; Load the value 0x2222 into the AX register.
+    ret
+
+MOV AX, 0x3333 ; Load the value 0x3333 into the AX register.

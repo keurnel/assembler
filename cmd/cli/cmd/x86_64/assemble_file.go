@@ -80,6 +80,24 @@ func assembleFile(ctx *x86_64.Assembler) (string, error) {
 				println("    -", operand)
 			}
 		}
+
+		// Child groups (for namespaces)
+		if group.HasChildren() {
+			println("Child Groups:")
+			for childIdentifier, childGroup := range group.Children {
+				println("  Child Group Identifier:", childIdentifier)
+				println("  Child Group Type:", childGroup.Type)
+				println("  Instructions:")
+				for _, instr := range childGroup.Instructions {
+					println("    Mnemonic:", instr.Mnemonic)
+					println("    Operands:")
+					for _, operand := range instr.Operands {
+						println("      -", operand)
+					}
+				}
+			}
+		}
+
 		println()
 	}
 

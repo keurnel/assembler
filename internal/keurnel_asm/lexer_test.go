@@ -86,3 +86,71 @@ ret`
 		}
 	}
 }
+
+func TestParserNamespaceHierarchy(t *testing.T) {
+	input := `namespace my_namespace
+
+.start:
+    MOV AX, 0x1234
+    ret
+
+group:
+    MOV BX, 0x5678
+    ret
+
+MOV CX, 0x9ABC`
+
+	lexer := LexerNew(input)
+	lexer.Process()
+
+	parser := ParserNew(lexer)
+	parser.Parse()
+
+	// Check that namespace exists
+	namespace, exists := parser.GetGroup("namespace:my_namespace")
+	if !exists {
+		t.Fatal("Namespace 'my_namespace' not found")
+	}
+
+	if namespace.Type != INSTRUCTION_GROUP_TYPE_NAMESPACE {
+		t.Errorf("Expected namespace type %d, got %d", INSTRUCTION_GROUP_TYPE_NAMESPACE, namespace.Type)
+	}
+
+	// Check that .start is a child of the namespace
+	startGroup, exists := namespace.GetChild(".start")
+	if !exists {
+		t.Fatal("Child group '.start' not found in namespace")
+	}
+
+	if startGroup.Type != INSTRUCTION_GROUP_TYPE_DIRECTIVE {
+		t.Errorf("Expected directive type %d, got %d", INSTRUCTION_GROUP_TYPE_DIRECTIVE, startGroup.Type)
+	}
+
+	if len(startGroup.Instructions) != 2 {
+		t.Errorf("Expected 2 instructions in .start, got %d", len(startGroup.Instructions))
+	}
+
+	// Check that group: is a child of the namespace
+	groupLabel, exists := namespace.GetChild("group:")
+	if !exists {
+		t.Fatal("Child group 'group:' not found in namespace")
+	}
+
+	if groupLabel.Type != INSTRUCTION_GROUP_TYPE_LABEL {
+		t.Errorf("Expected label type %d, got %d", INSTRUCTION_GROUP_TYPE_LABEL, groupLabel.Type)
+	}
+
+	// Check that global instructions exist
+	globalGroup, exists := parser.GetGroup("global")
+	if !exists {
+		t.Fatal("Global group not found")
+	}
+
+	if len(globalGroup.Instructions) != 1 {
+		t.Errorf("Expected 1 global instruction, got %d", len(globalGroup.Instructions))
+	}
+
+	if globalGroup.Instructions[0].Mnemonic != "MOV" {
+		t.Errorf("Expected global instruction 'MOV', got '%s'", globalGroup.Instructions[0].Mnemonic)
+	}
+}
