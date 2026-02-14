@@ -1,30 +1,31 @@
 ; ==============================================================================
+; Keurnel Assembly Language - X86_64 Syntax Example
+; ==============================================================================
+; This file demonstrates the syntax of Keurnel Assembly Language (KASM)
+; for documentation and syntax highlighting purposes.
+; ==============================================================================
+
+section .text
+global _start
+
+; ==============================================================================
 ; Main Entry Point
 ; ==============================================================================
 _start:
-
-    use math
-    use lifecycle
-    use demo
-
     ; Initialize and call math functions
     mov rdi, 5                      ; First argument: a = 5
     mov rsi, 3                      ; Second argument: b = 3
-    call math._add                 ; Call math::_add(5, 3)
+    call math_add                   ; Call math::_add(5, 3)
 
     mov rdi, 10                     ; First argument: a = 10
     mov rsi, 4                      ; Second argument: b = 4
-    call math._subtract            ; Call math::_subtract(10, 4)
+    call math_subtract              ; Call math::_subtract(10, 4)
 
     ; Call local example function
     call _start_example
 
     ; Call lifecycle initialization
-    call lifecycle._start
-
-    ; Call demo functions
-    call demo._registers
-    call demo._memory
+    call lifecycle_start
 
     ; Exit program gracefully
     mov rax, 60                     ; syscall: exit
@@ -60,16 +61,14 @@ global_group:
 ; Mathematical operations and utilities
 ; ==============================================================================
 
-namespace math
-
-_start:
+math_start:
     ; Initialize math subsystem
     mov rdi, 0                      ; Clear first argument
     mov rsi, 1                      ; Set second argument to 1
-    call _add
+    call math_add
     ret
 
-_add:
+math_add:
     ; Add two 64-bit integers
     ; Parameters:
     ;   rdi = a (first operand)
@@ -80,7 +79,7 @@ _add:
     add rax, rsi                    ; Add second operand
     ret
 
-_subtract:
+math_subtract:
     ; Subtract two 64-bit integers
     ; Parameters:
     ;   rdi = a (minuend)
@@ -91,7 +90,7 @@ _subtract:
     sub rax, rsi                    ; Subtract subtrahend
     ret
 
-_multiply:
+math_multiply:
     ; Multiply two 64-bit integers
     ; Parameters:
     ;   rdi = a (multiplicand)
@@ -102,7 +101,7 @@ _multiply:
     imul rax, rsi                   ; Multiply by multiplier
     ret
 
-_divide:
+math_divide:
     ; Divide two 64-bit integers
     ; Parameters:
     ;   rdi = a (dividend)
@@ -120,11 +119,7 @@ _divide:
 ; System lifecycle management functions
 ; ==============================================================================
 
-namespace lifecycle
-
-use math
-
-_start:
+lifecycle_start:
     ; Initialize lifecycle subsystem
     ; Uses math namespace functions for demonstration
     push rbp
@@ -133,7 +128,7 @@ _start:
     ; Perform initialization calculation
     mov rdi, 100                    ; Set a = 100
     mov rsi, 50                     ; Set b = 50
-    call math::_add                 ; Call math::_add(100, 50)
+    call math_add                   ; Call math::_add(100, 50)
 
     ; Store result
     mov r12, rax                    ; Save result in r12
@@ -141,12 +136,12 @@ _start:
     ; Perform another operation
     mov rdi, r12                    ; Use previous result
     mov rsi, 25                     ; Set b = 25
-    call math::_subtract            ; Call math::_subtract(result, 25)
+    call math_subtract              ; Call math::_subtract(result, 25)
 
     pop rbp
     ret
 
-_shutdown:
+lifecycle_shutdown:
     ; Cleanup and shutdown
     ; Clear all general-purpose registers
     xor rax, rax
@@ -161,20 +156,17 @@ _shutdown:
     xor r11, r11
     ret
 
-_restart:
+lifecycle_restart:
     ; Restart the lifecycle
-    call _shutdown
-    call _start
+    call lifecycle_shutdown
+    call lifecycle_start
     ret
 
 ; ==============================================================================
-; Namespace: demo
-; Advanced features demonstration
+; Advanced Features Demonstration
 ; ==============================================================================
 
-namespace demo
-
-_registers:
+demo_registers:
     ; Demonstrate various register operations
     ; 64-bit registers
     mov rax, 0x1234567890ABCDEF
@@ -194,7 +186,7 @@ _registers:
 
     ret
 
-_memory:
+demo_memory:
     ; Demonstrate memory operations
     push rbp
     mov rbp, rsp
@@ -216,7 +208,7 @@ _memory:
     pop rbp
     ret
 
-_conditionals:
+demo_conditionals:
     ; Demonstrate conditional operations
     mov rax, 10
     mov rbx, 20
@@ -231,7 +223,7 @@ _conditionals:
 .end:
     ret
 
-_loops:
+demo_loops:
     ; Demonstrate loop operations
     mov rcx, 10                     ; Counter = 10
     xor rax, rax                    ; Sum = 0
