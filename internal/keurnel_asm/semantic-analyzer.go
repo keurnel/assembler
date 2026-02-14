@@ -16,10 +16,27 @@ func SemanticAnalyzerNew(parser *Parser) *SemanticAnalyzer {
 // Analyze - performs semantic analysis on the parsed instruction groups to ensure correctness and resolve namespaces
 func (sa *SemanticAnalyzer) Analyze() error {
 
-	// Verify that all `use` statements reference valid namespaces
-	// use cannot reference a namespace that does not exist in the parsed groups
-	// or make a reference to the namespace itself.
+	// First, we must ensure that there is a `_start:` directive in the global scope, as
+	// this is required as the entry-point for the program.
 	//
+	if _, exists := sa.parser.GetGroup("_start:"); !exists {
+		return errors.New("SEMANTIC ERROR: missing `_start:` directive in global scope")
+	}
+
+	// Ensure that all `use` statements are valid.
+	//
+	validUseStatements := sa.validateUseStatements()
+	if validUseStatements != nil {
+		return validUseStatements
+	}
+
+	return nil
+}
+
+// validateUseStatements - validates that all `use` statements reference valid namespaces and do not create circular
+// references.
+func (sa *SemanticAnalyzer) validateUseStatements() error {
+
 	for identifier, group := range sa.parser.Groups() {
 		for _, ns := range group.Uses {
 			if _, exists := sa.parser.GetGroup(ns); !exists {

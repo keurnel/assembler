@@ -6,12 +6,17 @@ _start:
     math._add(5, 3)
     math._subtract(10, 4)
 
+    call .example
+
+.example:
+    ; Example of using the global group\
+    ret
+
 global_group:
     mov 0, rax
     ret
 
 namespace math
-
     _start:
         mov 0, rdi
         mov 1, rsi

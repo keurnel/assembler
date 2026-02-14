@@ -67,7 +67,11 @@ func assembleFile(ctx *x86_64.Assembler) (string, error) {
 	lexer.Process()
 
 	parser := keurnel_asm.ParserNew(lexer)
-	parser.Parse()
+	err := parser.Parse()
+	if err != nil {
+		slog.Error("Parsing failed:", "error", err)
+		os.Exit(1)
+	}
 
 	// Print each group
 	//
@@ -108,7 +112,7 @@ func assembleFile(ctx *x86_64.Assembler) (string, error) {
 	}
 
 	semanticAnalyzer := keurnel_asm.SemanticAnalyzerNew(parser)
-	err := semanticAnalyzer.Analyze()
+	err = semanticAnalyzer.Analyze()
 	if err != nil {
 		slog.Error("Semantic analysis failed:", "error", err)
 		os.Exit(1)
