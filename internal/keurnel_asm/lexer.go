@@ -92,6 +92,12 @@ func (l *Lexer) Process() []Token {
 				continue
 			}
 
+			// Check if this is a use statement
+			if l.peekUse() {
+				l.tokens = append(l.tokens, l.readUse())
+				continue
+			}
+
 			// Check if this is a label (ends with ':')
 			if l.peekLabel() {
 				l.tokens = append(l.tokens, l.readLabel())
@@ -212,6 +218,24 @@ func (l *Lexer) peekNamespace() bool {
 	return true
 }
 
+func (l *Lexer) peekUse() bool {
+	// Check if the current word is "use"
+	pos := l.position
+	keyword := "use"
+	for i := 0; i < len(keyword); i++ {
+		if pos >= len(l.input) || l.input[pos] != keyword[i] {
+			return false
+		}
+		pos++
+	}
+	// Make sure it's followed by whitespace or end of input
+	if pos < len(l.input) {
+		ch := l.input[pos]
+		return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r'
+	}
+	return true
+}
+
 func (l *Lexer) readLabel() Token {
 	start := l.position
 	for l.isLetter(l.ch) || (l.ch >= '0' && l.ch <= '9') || l.ch == '_' {
@@ -240,6 +264,25 @@ func (l *Lexer) readNamespace() Token {
 
 	namespaceName := l.input[start:l.position]
 	return Token{Type: NAMESPACE, Literal: namespaceName}
+}
+
+func (l *Lexer) readUse() Token {
+	// Skip "use" keyword
+	for l.isLetter(l.ch) {
+		l.readChar()
+	}
+
+	// Skip whitespace after "use"
+	l.skipWhitespace()
+
+	// Read the namespace name to use
+	start := l.position
+	for l.isLetter(l.ch) || (l.ch >= '0' && l.ch <= '9') || l.ch == '_' {
+		l.readChar()
+	}
+
+	useNamespace := l.input[start:l.position]
+	return Token{Type: USE, Literal: useNamespace}
 }
 
 func (l *Lexer) readInstruction() Token {

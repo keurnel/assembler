@@ -1,6 +1,7 @@
 package x86_64
 
 import (
+	"log/slog"
 	"os"
 
 	"github.com/keurnel/assembler/architecture/x86_64"
@@ -69,9 +70,14 @@ func assembleFile(ctx *x86_64.Assembler) (string, error) {
 	parser.Parse()
 
 	// Print each group
+	//
 	for identifier, group := range parser.Groups() {
 		println("Group Identifier:", identifier)
 		println("Group Type:", group.Type)
+		println("Group uses:")
+		for _, ns := range group.Uses {
+			println("  -", ns)
+		}
 		println("Instructions:")
 		for _, instr := range group.Instructions {
 			println("  Mnemonic:", instr.Mnemonic)
@@ -99,6 +105,13 @@ func assembleFile(ctx *x86_64.Assembler) (string, error) {
 		}
 
 		println()
+	}
+
+	semanticAnalyzer := keurnel_asm.SemanticAnalyzerNew(parser)
+	err := semanticAnalyzer.Analyze()
+	if err != nil {
+		slog.Error("Semantic analysis failed:", "error", err)
+		os.Exit(1)
 	}
 
 	return "", nil

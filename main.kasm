@@ -1,11 +1,14 @@
 ; Keurnel Assembly X86_64
 ;
-use math
-
 _start:
+
     ; Entry point of the program
     math._add(5, 3)
     math._subtract(10, 4)
+
+global_group:
+    mov 0, rax
+    ret
 
 namespace math
 
@@ -29,6 +32,7 @@ namespace math
 
 
 namespace lifecycle
+    use math
 
     _start:
         ; Do nothing.

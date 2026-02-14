@@ -19,6 +19,7 @@ type InstructionGroup struct {
 	Identifier   string                      // Name of the group
 	Instructions []Instruction               // Instructions in this group
 	Children     map[string]InstructionGroup // Child groups (for namespaces)
+	Uses         []string                    // Namespaces used by this group (via 'use' statements)
 }
 
 // Instruction - represents a single assembly instruction, including the mnemonic and its operands.
@@ -85,6 +86,7 @@ func (p *Parser) Parse() {
 					Identifier:   "global",
 					Instructions: namespaceGlobalInstructions[currentNamespace.Identifier],
 					Children:     make(map[string]InstructionGroup),
+					Uses:         []string{},
 				}
 				p.groups["namespace:"+currentNamespace.Identifier] = *currentNamespace
 			}
@@ -94,10 +96,25 @@ func (p *Parser) Parse() {
 				Identifier:   token.Literal,
 				Instructions: []Instruction{},
 				Children:     make(map[string]InstructionGroup),
+				Uses:         []string{},
 			}
 			p.groups["namespace:"+token.Literal] = group
 			// Set current namespace to this group (we'll update it in the map later)
 			currentNamespace = &group
+			i++
+			continue
+		}
+
+		// Handle use statements
+		if token.Type == USE {
+			// Use statements should be added to the current namespace
+			if currentNamespace != nil {
+				currentNamespace.Uses = append(currentNamespace.Uses, "namespace:"+token.Literal)
+				// Update the namespace in the groups map
+				p.groups["namespace:"+currentNamespace.Identifier] = *currentNamespace
+			}
+			// If there's no current namespace, we could either ignore it or track it separately
+			// For now, we'll just skip it as use statements outside namespaces don't make much sense
 			i++
 			continue
 		}
@@ -114,6 +131,7 @@ func (p *Parser) Parse() {
 				Identifier:   token.Literal,
 				Instructions: []Instruction{},
 				Children:     make(map[string]InstructionGroup),
+				Uses:         []string{},
 			}
 
 			i++ // Move past the label/directive token
@@ -208,6 +226,7 @@ func (p *Parser) Parse() {
 			Identifier:   "global",
 			Instructions: namespaceGlobalInstructions[currentNamespace.Identifier],
 			Children:     make(map[string]InstructionGroup),
+			Uses:         []string{},
 		}
 		p.groups["namespace:"+currentNamespace.Identifier] = *currentNamespace
 	}
@@ -219,6 +238,7 @@ func (p *Parser) Parse() {
 			Identifier:   "global",
 			Instructions: globalInstructions,
 			Children:     make(map[string]InstructionGroup),
+			Uses:         []string{},
 		}
 	}
 }
