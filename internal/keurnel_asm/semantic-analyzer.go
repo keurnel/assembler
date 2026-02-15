@@ -39,6 +39,9 @@ func (sa *SemanticAnalyzer) validateUseStatements() error {
 
 	for identifier, group := range sa.parser.Groups() {
 		for _, ns := range group.Uses {
+
+			println(ns)
+
 			if _, exists := sa.parser.GetGroup(ns); !exists {
 				return errors.New("Semantic error: Group '" + identifier + "' references non-existent namespace '" + ns + "' in 'use' statement")
 			}
