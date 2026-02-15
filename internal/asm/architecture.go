@@ -5,6 +5,10 @@ package asm
 type Architecture interface {
 	// ArchitectureName - returns the name of the architecture (e.g., "x86_64", "arm64", etc.).
 	ArchitectureName() string
+	// Directives - returns a list of supported directives for the architecture.
+	Directives() []string
+	// IsDirective - checks if a given line of assembly code is a valid directive for the architecture.
+	IsDirective(line string) bool
 	// Instructions - returns a list of supported instructions for the architecture.
 	Instructions() map[string]Instruction
 	// IsInstruction - checks if a given line of assembly code is a valid instruction for the architecture.

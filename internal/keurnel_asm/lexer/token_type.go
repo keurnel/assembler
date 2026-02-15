@@ -93,7 +93,7 @@ func TokenTypeDetermine(literal string, architecture *asm.Architecture) TokenTyp
 	// Handling of directives
 	//
 	// =========================================================
-	isDirective, err := isDirective(literal)
+	isDirective, err := isDirective(literal, *architecture)
 	if err != nil {
 		switch err.Error() {
 		default:
@@ -137,11 +137,11 @@ func TokenTypeDetermine(literal string, architecture *asm.Architecture) TokenTyp
 
 		// Cannot be reserved keywords such as CPU opcodes or machine instructions.
 		//
-		if isCPUOpcode(literal) {
+		if isCPUOpcode(literal, *architecture) {
 			return INSTRUCTION
 		}
 
-		if isMachineInstruction(literal) {
+		if isMachineInstruction(literal, *architecture) {
 			return REGISTER
 		}
 
@@ -217,11 +217,11 @@ func TokenTypeDetermine(literal string, architecture *asm.Architecture) TokenTyp
 	// Instruction mnemonics
 	//
 	// =========================================================
-	if isCPUOpcode(literal) {
+	if isCPUOpcode(literal, *architecture) {
 		return INSTRUCTION
 	}
 
-	if isMachineInstruction(literal) {
+	if isMachineInstruction(literal, *architecture) {
 		return REGISTER
 	}
 
@@ -232,12 +232,12 @@ func TokenTypeDetermine(literal string, architecture *asm.Architecture) TokenTyp
 }
 
 // isDirective - checks if the given literal matches a known directive pattern.
-func isDirective(literal string) (bool, error) {
+func isDirective(literal string, architecture asm.Architecture) (bool, error) {
 
 	// 1. Check if literal corresponds to any CPU opcode or machine instruction. If
 	// it does, then it cannot be a directive.
 	//
-	if isCPUOpcode(literal) || isMachineInstruction(literal) {
+	if isCPUOpcode(literal, architecture) || isMachineInstruction(literal, architecture) {
 		return false, nil
 	}
 
@@ -245,47 +245,11 @@ func isDirective(literal string) (bool, error) {
 	// in the known directives map, then it is a directive. Otherwise, continue
 	// checking other rules.
 	//
-	knownDirectives := map[string]bool{
-		".data":         true,
-		".data:":        true,
-		".text":         true,
-		".text:":        true,
-		".section":      true,
-		".section:":     true,
-		".global":       true,
-		".global:":      true,
-		".globl":        true, // alternative spelling
-		".globl:":       true,
-		".bss":          true, // uninitialized data section
-		".bss:":         true,
-		".rodata":       true, // read-only data section
-		".rodata:":      true,
-		".extern":       true, // external symbol declaration
-		".extern:":      true,
-		".byte":         true, // define byte
-		".word":         true, // define word (2 bytes)
-		".long":         true, // define long (4 bytes)
-		".quad":         true, // define quad (8 bytes)
-		".ascii":        true, // ASCII string
-		".asciz":        true, // null-terminated ASCII string
-		".string":       true, // string data
-		".align":        true, // alignment directive
-		".balign":       true, // byte alignment
-		".p2align":      true, // power-of-2 alignment
-		".comm":         true, // common symbol
-		".local":        true, // local symbol
-		".type":         true, // symbol type
-		".size":         true, // symbol size
-		".set":          true, // set symbol value
-		".equ":          true, // equate symbol
-		".equiv":        true, // equivalent symbol
-		".intel_syntax": true, // Intel syntax mode
-		".att_syntax":   true, // AT&T syntax mode
-		".file":         true, // source file info
-		".ident":        true, // identification string
-	}
-	if _, exists := knownDirectives[literal]; exists {
-		return true, nil
+	knownDirectives := architecture.Directives()
+	for _, directive := range knownDirectives {
+		if literal == directive || literal == directive+":" {
+			return true, nil
+		}
 	}
 
 	// 3. Check if the literal starts with a single dot followed by characters (e.g., my_directive) and does
@@ -311,16 +275,24 @@ func isDirective(literal string) (bool, error) {
 }
 
 // isCPUOpcode - checks if the given literal matches a known CPU opcode.
-func isCPUOpcode(literal string) bool {
-	if _, exists := X86_64Opcodes[literal]; exists {
-		return true
+func isCPUOpcode(literal string, architecture asm.Architecture) bool {
+
+	// Get opcodes for the architecture. If the literal matches any of the opcodes, then it is an instruction and cannot be a directive.
+	opcodes := architecture.Instructions()
+
+	// Check if literal matches any of the opcodes for the architecture.
+	//
+	for opcode := range opcodes {
+		if literal == opcode {
+			return true
+		}
 	}
 
 	return false
 }
 
 // isMachineInstruction - checks if the given literal matches a known machine instruction.
-func isMachineInstruction(literal string) bool {
+func isMachineInstruction(literal string, architecture asm.Architecture) bool {
 	// This is a simplified check. In a real implementation, you would have a comprehensive list of machine instructions.
 	instructions := []string{"RAX", "RBX", "EAX", "EBX"}
 	for _, instr := range instructions {

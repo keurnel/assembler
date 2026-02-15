@@ -48,133 +48,125 @@ func TestTokenNew(t *testing.T) {
 }
 
 func TestTokenTypeDetermine(t *testing.T) {
-	scenarios := []struct {
+	scenariosX86_64 := []struct {
 		name         string
 		literal      string
 		expected     lexer.TokenType
 		architecture asm.Architecture
 	}{
 		// Directives
-		// Directives
 		{"Directive .data", ".data", lexer.DIRECTIVE, x86_64.New("")},
-		{"Directive .data with colon", ".data:", lexer.DIRECTIVE},
-		{"Directive .text", ".text", lexer.DIRECTIVE},
-		{"Directive .text with colon", ".text:", lexer.DIRECTIVE},
-		{"Directive .section", ".section", lexer.DIRECTIVE},
-		{"Directive .section with colon", ".section:", lexer.DIRECTIVE},
-		{"Directive .global", ".global", lexer.DIRECTIVE},
-		{"Directive .global with colon", ".global:", lexer.DIRECTIVE},
-		{"Directive .globl", ".globl", lexer.DIRECTIVE},
-		{"Directive .globl with colon", ".globl:", lexer.DIRECTIVE},
-		{"Directive .bss", ".bss", lexer.DIRECTIVE},
-		{"Directive .bss with colon", ".bss:", lexer.DIRECTIVE},
-		{"Directive .rodata", ".rodata", lexer.DIRECTIVE},
-		{"Directive .rodata with colon", ".rodata:", lexer.DIRECTIVE},
-		{"Directive .extern", ".extern", lexer.DIRECTIVE},
-		{"Directive .extern with colon", ".extern:", lexer.DIRECTIVE},
-		{"Directive .byte", ".byte", lexer.DIRECTIVE},
-		{"Directive .byte with colon", ".byte:", lexer.DIRECTIVE},
-		{"Directive .word", ".word", lexer.DIRECTIVE},
-		{"Directive .word with colon", ".word:", lexer.DIRECTIVE},
-		{"Directive .long", ".long", lexer.DIRECTIVE},
-		{"Directive .long with colon", ".long:", lexer.DIRECTIVE},
-		{"Directive .quad", ".quad", lexer.DIRECTIVE},
-		{"Directive .quad with colon", ".quad:", lexer.DIRECTIVE},
-		{"Directive .ascii", ".ascii", lexer.DIRECTIVE},
-		{"Directive .ascii with colon", ".ascii:", lexer.DIRECTIVE},
-		{"Directive .asciz", ".asciz", lexer.DIRECTIVE},
-		{"Directive .asciz with colon", ".asciz:", lexer.DIRECTIVE},
-		{"Directive .string", ".string", lexer.DIRECTIVE},
-		{"Directive .string with colon", ".string:", lexer.DIRECTIVE},
-		{"Directive .align", ".align", lexer.DIRECTIVE},
-		{"Directive .align with colon", ".align:", lexer.DIRECTIVE},
-		{"Directive .balign", ".balign", lexer.DIRECTIVE},
-		{"Directive .balign with colon", ".balign:", lexer.DIRECTIVE},
-		{"Directive .p2align", ".p2align", lexer.DIRECTIVE},
-		{"Directive .p2align with colon", ".p2align:", lexer.DIRECTIVE},
-		{"Directive .comm", ".comm", lexer.DIRECTIVE},
-		{"Directive .comm with colon", ".comm:", lexer.DIRECTIVE},
-		{"Directive .local", ".local", lexer.DIRECTIVE},
-		{"Directive .local with colon", ".local:", lexer.DIRECTIVE},
-		{"Directive .type", ".type", lexer.DIRECTIVE},
-		{"Directive .type with colon", ".type:", lexer.DIRECTIVE},
-		{"Directive .size", ".size", lexer.DIRECTIVE},
-		{"Directive .size with colon", ".size:", lexer.DIRECTIVE},
-		{"Directive .set", ".set", lexer.DIRECTIVE},
-		{"Directive .set with colon", ".set:", lexer.DIRECTIVE},
-		{"Directive .equ", ".equ", lexer.DIRECTIVE},
-		{"Directive .equ with colon", ".equ:", lexer.DIRECTIVE},
-		{"Directive .equiv", ".equiv", lexer.DIRECTIVE},
-		{"Directive .equiv with colon", ".equiv:", lexer.DIRECTIVE},
-		{"Directive .intel_syntax", ".intel_syntax", lexer.DIRECTIVE},
-		{"Directive .intel_syntax with colon", ".intel_syntax:", lexer.DIRECTIVE},
-		{"Directive .att_syntax", ".att_syntax", lexer.DIRECTIVE},
-		{"Directive .att_syntax with colon", ".att_syntax:", lexer.DIRECTIVE},
-		{"Directive .file", ".file", lexer.DIRECTIVE},
-		{"Directive .file with colon", ".file:", lexer.DIRECTIVE},
-		{"Directive .ident", ".ident", lexer.DIRECTIVE},
-		{"Directive .ident with colon", ".ident:", lexer.DIRECTIVE},
-		{"Directive custom", ".custom:", lexer.DIRECTIVE},
+		{"Directive .data with colon", ".data:", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .text", ".text", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .text with colon", ".text:", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .section", ".section", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .section with colon", ".section:", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .global", ".global", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .global with colon", ".global:", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .globl", ".globl", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .globl with colon", ".globl:", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .bss", ".bss", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .bss with colon", ".bss:", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .rodata", ".rodata", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .rodata with colon", ".rodata:", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .extern", ".extern", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .extern with colon", ".extern:", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .byte", ".byte", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .byte with colon", ".byte:", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .word", ".word", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .word with colon", ".word:", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .long", ".long", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .long with colon", ".long:", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .quad", ".quad", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .quad with colon", ".quad:", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .ascii", ".ascii", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .ascii with colon", ".ascii:", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .asciz", ".asciz", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .asciz with colon", ".asciz:", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .string", ".string", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .string with colon", ".string:", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .align", ".align", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .align with colon", ".align:", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .balign", ".balign", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .balign with colon", ".balign:", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .p2align", ".p2align", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .p2align with colon", ".p2align:", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .comm", ".comm", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .comm with colon", ".comm:", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .local", ".local", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .local with colon", ".local:", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .type", ".type", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .type with colon", ".type:", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .size", ".size", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .size with colon", ".size:", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .set", ".set", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .set with colon", ".set:", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .equ", ".equ", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .equ with colon", ".equ:", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .equiv", ".equiv", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .equiv with colon", ".equiv:", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .intel_syntax", ".intel_syntax", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .intel_syntax with colon", ".intel_syntax:", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .att_syntax", ".att_syntax", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .att_syntax with colon", ".att_syntax:", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .file", ".file", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .file with colon", ".file:", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .ident", ".ident", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive .ident with colon", ".ident:", lexer.DIRECTIVE, x86_64.New("")},
+		{"Directive custom", ".custom:", lexer.DIRECTIVE, x86_64.New("")},
 
 		// Label tokens
-		{"Label token with valid format", "main:", lexer.LABEL},
-		{"Label token with valid format and leading whitespace", "loop:", lexer.LABEL},
-		{"Label token with valid format and trailing whitespace", "function:", lexer.LABEL},
-		{"Label token with valid format and surrounding whitespace", "start:", lexer.LABEL},
+		{"Label token with valid format", "main:", lexer.LABEL, x86_64.New("")},
+		{"Label token with valid format and leading whitespace", "loop:", lexer.LABEL, x86_64.New("")},
+		{"Label token with valid format and trailing whitespace", "function:", lexer.LABEL, x86_64.New("")},
+		{"Label token with valid format and surrounding whitespace", "start:", lexer.LABEL, x86_64.New("")},
 
 		// Identifier tokens
-		{"Identifier token with valid format", "my_variable", lexer.IDENT},
+		{"Identifier token with valid format", "my_variable", lexer.IDENT, x86_64.New("")},
 
 		// Int tokens
-		{"Int token with decimal format", "12345", lexer.INT},
-		{"Int token with hexadecimal format", "0x1A2B3C", lexer.INT},
-		{"Int token with octal format", "0o755", lexer.INT},
-		{"Int token with binary format", "0b11010101", lexer.INT},
+		{"Int token with decimal format", "12345", lexer.INT, x86_64.New("")},
+		{"Int token with hexadecimal format", "0x1A2B3C", lexer.INT, x86_64.New("")},
+		{"Int token with octal format", "0o755", lexer.INT, x86_64.New("")},
+		{"Int token with binary format", "0b11010101", lexer.INT, x86_64.New("")},
 
 		// Float tokens
-		{"Float token with decimal format", "3.14", lexer.FLOAT},
-		{"Float token with scientific notation", "1.23e-4", lexer.FLOAT},
-		{"Float token with leading decimal point", ".5", lexer.FLOAT},
-		{"Float token with trailing decimal point", "2.", lexer.FLOAT},
+		{"Float token with decimal format", "3.14", lexer.FLOAT, x86_64.New("")},
+		{"Float token with scientific notation", "1.23e-4", lexer.FLOAT, x86_64.New("")},
+		{"Float token with leading decimal point", ".5", lexer.FLOAT, x86_64.New("")},
+		{"Float token with trailing decimal point", "2.", lexer.FLOAT, x86_64.New("")},
 
 		// Char tokens
-		{"Char token with single character", "'A'", lexer.CHAR},
-		{"Char token with escaped character", "'\\n'", lexer.CHAR},
+		{"Char token with single character", "'A'", lexer.CHAR, x86_64.New("")},
+		{"Char token with escaped character", "'\\n'", lexer.CHAR, x86_64.New("")},
 
 		// String tokens
-		{"String token with double quotes", "\"Hello, World!\"", lexer.STRING},
-		{"String token with single quotes", "'Hello, World!'", lexer.STRING},
-		{"String token with escaped characters", "\"Line 1\\nLine 2\"", lexer.STRING},
+		{"String token with double quotes", "\"Hello, World!\"", lexer.STRING, x86_64.New("")},
+		{"String token with single quotes", "'Hello, World!'", lexer.STRING, x86_64.New("")},
+		{"String token with escaped characters", "\"Line 1\\nLine 2\"", lexer.STRING, x86_64.New("")},
 
 		// Instruction tokens
-		{"Instruction token with valid mnemonic", "MOV", lexer.INSTRUCTION},
-		{"Instruction token with valid mnemonic and lowercase", "ADD", lexer.INSTRUCTION},
-		{"Instruction token with valid mnemonic and mixed case", "LEA", lexer.INSTRUCTION},
+		{"Instruction token with valid mnemonic", "MOV", lexer.INSTRUCTION, x86_64.New("")},
+		{"Instruction token with valid mnemonic and lowercase", "ADD", lexer.INSTRUCTION, x86_64.New("")},
+		{"Instruction token with valid mnemonic and mixed case", "LEA", lexer.INSTRUCTION, x86_64.New("")},
 
 		// Register tokens
-		{"Register token with valid format and uppercase", "RAX", lexer.REGISTER},
+		{"Register token with valid format and uppercase", "RAX", lexer.REGISTER, x86_64.New("")},
 
 		// Illegal tokens
-		{"Illegal token without dot", "data", lexer.ILLEGAL},
-		{"Illegal token with dot but no directive name", ".:", lexer.ILLEGAL},
-		{"Illegal token starting with 'kasm'", ".kasmDirective:", lexer.ILLEGAL_RESERVED},
+		{"Illegal token without dot", "data", lexer.ILLEGAL, x86_64.New("")},
+		{"Illegal token with dot but no directive name", ".:", lexer.ILLEGAL, x86_64.New("")},
+		{"Illegal token starting with 'kasm'", ".kasmDirective:", lexer.ILLEGAL_RESERVED, x86_64.New("")},
 	}
 
-	for _, scenario := range scenarios {
-		t.Run(scenario.name, func(t *testing.T) {
-			tokenType := lexer.TokenTypeDetermine(scenario.literal)
-			if tokenType != scenario.expected {
-				t.Errorf("Expected token type to be '%s', got '%s'", scenario.expected, tokenType)
-			}
-		})
-	}
-
-	// Custom without colon should not be recognized as a directive.
-	//
-	t.Run("Custom without colon", func(t *testing.T) {
-		tokenType := lexer.TokenTypeDetermine(".custom")
-		if tokenType == lexer.DIRECTIVE {
-			t.Errorf("Expected token type to not be 'DIRECTIVE' for '.custom', got '%s'", tokenType)
+	t.Run("Architecture: x86_64", func(t *testing.T) {
+		for _, scenario := range scenariosX86_64 {
+			t.Run(scenario.name, func(t *testing.T) {
+				tokenType := lexer.TokenTypeDetermine(scenario.literal, &scenario.architecture)
+				if tokenType != scenario.expected {
+					t.Errorf("Expected token type to be '%s', got '%s'", scenario.expected, tokenType)
+				}
+			})
 		}
 	})
 }

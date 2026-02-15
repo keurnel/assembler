@@ -280,7 +280,7 @@ _start:
     MOV AX, 0x1234
     ret`
 
-	lexer := LexerNew(input)
+	lexer := LexerNew(input, x)
 	lexer.Process()
 
 	parser := ParserNew(lexer)

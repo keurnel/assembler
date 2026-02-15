@@ -21,6 +21,26 @@ func (a *Assembler) ArchitectureName() string {
 	return "x86_64"
 }
 
+// Directives - returns the supported directives for the architecture
+func (a *Assembler) Directives() []string {
+	return []string{
+		".data",
+		".text",
+		".global",
+		".section",
+		".align",
+		".byte",
+		".word",
+		".dword",
+		".qword",
+	}
+}
+
+// IsDirective - checks if a given line of assembly code is a valid directive for the architecture
+func (a *Assembler) IsDirective(line string) bool {
+	return false
+}
+
 // Instructions - returns the parsed assembly instructions
 func (a *Assembler) Instructions() map[string]asm.Instruction {
 
