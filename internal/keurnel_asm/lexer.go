@@ -1,5 +1,7 @@
 package keurnel_asm
 
+import "github.com/keurnel/assembler/internal/asm"
+
 type TokenType string
 
 const (
@@ -36,15 +38,18 @@ type Lexer struct {
 	readPosition int
 	ch           byte
 	tokens       []Token
+
+	architecture asm.Architecture
 }
 
 // LexerNew - returns a new instance of the Lexer
-func LexerNew(input string) *Lexer {
+func LexerNew(input string, architecture *asm.Architecture) *Lexer {
 	l := &Lexer{
 		input:        input,
 		position:     0,
 		readPosition: 0,
 		tokens:       []Token{},
+		architecture: *architecture,
 	}
 	return l
 }

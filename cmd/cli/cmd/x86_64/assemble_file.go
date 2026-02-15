@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/keurnel/assembler/architecture/x86_64"
+	"github.com/keurnel/assembler/internal/asm"
 	"github.com/keurnel/assembler/internal/keurnel_asm"
 	"github.com/spf13/cobra"
 )
@@ -53,7 +54,7 @@ var AssembleFileCmd = &cobra.Command{
 
 		// Assemble file using the assembler context.
 		//
-		binary, err := assembleFile(assemblerContext)
+		binary, err := assembleFile(assemblerContext.RawSource(), assemblerContext)
 
 		println(binary)
 
@@ -61,9 +62,9 @@ var AssembleFileCmd = &cobra.Command{
 	},
 }
 
-func assembleFile(ctx *x86_64.Assembler) (string, error) {
+func assembleFile(source string, ctx asm.Architecture) (string, error) {
 
-	lexer := keurnel_asm.LexerNew(ctx.RawSource())
+	lexer := keurnel_asm.LexerNew(source, &ctx)
 	lexer.Process()
 
 	parser := keurnel_asm.ParserNew(lexer)

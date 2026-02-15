@@ -3,6 +3,8 @@ package lexer
 import (
 	"errors"
 	"regexp"
+
+	"github.com/keurnel/assembler/internal/asm"
 )
 
 const (
@@ -85,7 +87,7 @@ func (t *TokenType) Valid() *InvalidTokenTypeError {
 // TokenTypeDetermine - determines the token type of given literal string. The
 // literal should already be trimmed of whitespace and comments before being passed
 // to this function.
-func TokenTypeDetermine(literal string) TokenType {
+func TokenTypeDetermine(literal string, architecture *asm.Architecture) TokenType {
 	// =========================================================
 	//
 	// Handling of directives

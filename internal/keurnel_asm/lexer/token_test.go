@@ -3,6 +3,8 @@ package lexer_test
 import (
 	"testing"
 
+	"github.com/keurnel/assembler/architecture/x86_64"
+	"github.com/keurnel/assembler/internal/asm"
 	"github.com/keurnel/assembler/internal/keurnel_asm/lexer"
 )
 
@@ -47,13 +49,14 @@ func TestTokenNew(t *testing.T) {
 
 func TestTokenTypeDetermine(t *testing.T) {
 	scenarios := []struct {
-		name     string
-		literal  string
-		expected lexer.TokenType
+		name         string
+		literal      string
+		expected     lexer.TokenType
+		architecture asm.Architecture
 	}{
 		// Directives
 		// Directives
-		{"Directive .data", ".data", lexer.DIRECTIVE},
+		{"Directive .data", ".data", lexer.DIRECTIVE, x86_64.New("")},
 		{"Directive .data with colon", ".data:", lexer.DIRECTIVE},
 		{"Directive .text", ".text", lexer.DIRECTIVE},
 		{"Directive .text with colon", ".text:", lexer.DIRECTIVE},
