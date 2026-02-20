@@ -13,8 +13,8 @@ import (
 var AssembleFileCmd = &cobra.Command{
 	Use:     "assemble-file <assembly-file>",
 	GroupID: "file-operations",
-	Short:   "Assemble an x86_64 assembly file into a binary file.",
-	Long:    `Assemble an x86_64 assembly file into a binary file.`,
+	Short:   "Assemble an 64 assembly file into a binary file.",
+	Long:    `Assemble an 64 assembly file into a binary file.`,
 	Run: func(cmd *cobra.Command, args []string) {
 
 		if len(args) < 1 {
@@ -41,7 +41,7 @@ var AssembleFileCmd = &cobra.Command{
 			return
 		}
 
-		// Read the raw assembly source code from the specified file and create a new instance of the x86_64 assembler
+		// Read the raw assembly source code from the specified file and create a new instance of the 64 assembler
 		//
 		sourceBytes, err := os.ReadFile(fullPath)
 		if err != nil {
@@ -146,9 +146,9 @@ func assembleFile(source string, ctx asm.Architecture) (string, error) {
 //	source = asm.PreProcessingRemoveEmptyLines(source)
 //
 //	// Assemble the pre-processed assembly code into machine code using
-//	// the x86_64 assembler.
+//	// the 64 assembler.
 //	//
-//	assembler := x86_64.New(source)
+//	assembler := 64.New(source)
 //	machineCode, err := assembler.Assemble()
 //	if err != nil {
 //		return "", err

@@ -3,7 +3,7 @@ package asm
 // Architecture - defines the interface for an assembly architecture implementation. It provides
 // us with a way to interact with different assembly architectures in a consistent manner.
 type Architecture interface {
-	// ArchitectureName - returns the name of the architecture (e.g., "x86_64", "arm64", etc.).
+	// ArchitectureName - returns the name of the architecture (e.g., "64", "arm64", etc.).
 	ArchitectureName() string
 	// Directives - returns a list of supported directives for the architecture.
 	Directives() map[string]bool

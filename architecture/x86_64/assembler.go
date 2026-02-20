@@ -11,7 +11,7 @@ type Assembler struct {
 	rawSource string
 }
 
-// AssemblerNew - returns a new instance of the x86_64 assembler
+// AssemblerNew - returns a new instance of the 64 assembler
 func AssemblerNew(rawSource string) *Assembler {
 	return &Assembler{
 		rawSource: rawSource,
@@ -20,7 +20,7 @@ func AssemblerNew(rawSource string) *Assembler {
 
 // ArchitectureName - returns the name of the architecture
 func (a *Assembler) ArchitectureName() string {
-	return "x86_64"
+	return "64"
 }
 
 // Directives - returns the supported directives for the architecture
@@ -458,7 +458,7 @@ func (a *Assembler) IsValidOperandCount(count int) bool {
 
 // SourceOperandSupportsDestination - checks if a given source operand type can be used with a given destination operand type in an instruction
 func (a *Assembler) SourceOperandSupportsDestination(sourceType, destType asm.OperandType) bool {
-	// todo: implement this function based on the rules of operand compatibility for x86_64 instructions
+	// todo: implement this function based on the rules of operand compatibility for 64 instructions
 	return false
 }
 

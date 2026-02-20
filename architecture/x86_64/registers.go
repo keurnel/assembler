@@ -17,7 +17,7 @@ const (
 	RegisterDebug                       // Debug register
 )
 
-// Register represents an x86_64 register
+// Register represents an 64 register
 type Register struct {
 	Name     string
 	Type     RegisterType
