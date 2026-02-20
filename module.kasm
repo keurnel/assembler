@@ -1,3 +1,5 @@
+%include "module2.kasm"
+
 %macro module_macro 2
     mov rax, %1
     mov rdi, %2

@@ -258,3 +258,222 @@ func PreProcessingHandleIncludes(source string) (string, []PreProcessingInclusio
 
 	return source, inclusions
 }
+
+// PreProcessingHandleConditionals - processes conditional assembly directives in the source code,
+// such as %ifdef, %ifndef, %else, and %endif. It evaluates the conditions based on defined symbols and
+// returns the updated source code with the appropriate sections included or excluded.
+// PreProcessingHandleConditionals - processes %ifdef, %ifndef, %else, and %endif directives
+// in the source code, evaluating conditions based on the provided defined symbols map.
+// It returns the updated source code with the appropriate sections included or excluded.
+//
+// The function works in two passes:
+//  1. Validate the structure of all conditional directives, ensuring every %ifdef/%ifndef
+//     has a matching %endif, with at most one %else in between. Panics on structural errors.
+//  2. Evaluate each conditional block and replace it with the appropriate branch content,
+//     or remove it entirely if the condition is not met.
+func PreProcessingHandleConditionals(source string, definedSymbols map[string]bool) string {
+	// Match %ifdef, %ifndef, %else, and %endif directives
+	directiveRegex := regexp.MustCompile(`(?m)^\s*%(ifdef|ifndef|else|endif)\s*(\w*)\s*$`)
+	matches := directiveRegex.FindAllStringSubmatchIndex(source, -1)
+
+	type conditionalBlock struct {
+		ifDirective string // "ifdef" or "ifndef"
+		symbol      string // symbol being tested
+		ifStart     int    // byte offset of the start of the %ifdef/%ifndef line
+		ifEnd       int    // byte offset of the end of the %ifdef/%ifndef line
+		elseStart   int    // byte offset of the start of the %else line (-1 if absent)
+		elseEnd     int    // byte offset of the end of the %else line (-1 if absent)
+		endifStart  int    // byte offset of the start of the %endif line
+		endifEnd    int    // byte offset of the end of the %endif line
+		lineNumber  int    // line number of the opening directive (for error reporting)
+	}
+
+	// Pass 1: validate and collect all conditional blocks.
+	// Uses a stack to match opening directives with their %endif.
+	type stackEntry struct {
+		directive  string
+		symbol     string
+		start      int
+		end        int
+		lineNumber int
+		elseStart  int
+		elseEnd    int
+	}
+
+	stack := make([]stackEntry, 0, len(matches))
+	blocks := make([]conditionalBlock, 0, len(matches)/2)
+
+	for _, matchIdx := range matches {
+		if len(matchIdx) < 6 {
+			continue
+		}
+
+		matchStart := matchIdx[0]
+		matchEnd := matchIdx[1]
+		directive := source[matchIdx[2]:matchIdx[3]]
+		symbol := ""
+		if matchIdx[4] != matchIdx[5] {
+			symbol = source[matchIdx[4]:matchIdx[5]]
+		}
+		lineNumber := strings.Count(source[:matchStart], "\n") + 1
+
+		switch directive {
+		case "ifdef", "ifndef":
+			stack = append(stack, stackEntry{
+				directive:  directive,
+				symbol:     symbol,
+				start:      matchStart,
+				end:        matchEnd,
+				lineNumber: lineNumber,
+				elseStart:  -1,
+				elseEnd:    -1,
+			})
+
+		case "else":
+			if len(stack) == 0 {
+				panic(fmt.Sprintf("pre-processing error: %%else without matching %%ifdef/%%ifndef at line %d", lineNumber))
+			}
+			top := &stack[len(stack)-1]
+			if top.elseStart != -1 {
+				panic(fmt.Sprintf("pre-processing error: Duplicate %%else for %%ifdef/%%ifndef at line %d (first %%else already seen)", lineNumber))
+			}
+			top.elseStart = matchStart
+			top.elseEnd = matchEnd
+
+		case "endif":
+			if len(stack) == 0 {
+				panic(fmt.Sprintf("pre-processing error: %%endif without matching %%ifdef/%%ifndef at line %d", lineNumber))
+			}
+			top := stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+
+			blocks = append(blocks, conditionalBlock{
+				ifDirective: top.directive,
+				symbol:      top.symbol,
+				ifStart:     top.start,
+				ifEnd:       top.end,
+				elseStart:   top.elseStart,
+				elseEnd:     top.elseEnd,
+				endifStart:  matchStart,
+				endifEnd:    matchEnd,
+				lineNumber:  top.lineNumber,
+			})
+		}
+	}
+
+	// Validate that all opened conditional blocks are closed.
+	if len(stack) > 0 {
+		top := stack[len(stack)-1]
+		panic(fmt.Sprintf("pre-processing error: %%ifdef/%%ifndef at line %d has no matching %%endif", top.lineNumber))
+	}
+
+	// Pass 2: evaluate each conditional block and replace with the appropriate branch.
+	// Process blocks in reverse order to preserve byte offsets during replacement.
+	for i := len(blocks) - 1; i >= 0; i-- {
+		block := blocks[i]
+
+		conditionMet := definedSymbols[block.symbol]
+		if block.ifDirective == "ifndef" {
+			conditionMet = !conditionMet
+		}
+
+		var replacement string
+		if block.elseStart == -1 {
+			// No %else branch: include body if condition met, otherwise remove the whole block.
+			if conditionMet {
+				replacement = strings.TrimRight(source[block.ifEnd:block.endifStart], " \t\n\r")
+			} else {
+				replacement = ""
+			}
+		} else {
+			// Has %else branch: pick the appropriate branch.
+			if conditionMet {
+				replacement = strings.TrimRight(source[block.ifEnd:block.elseStart], " \t\n\r")
+			} else {
+				replacement = strings.TrimRight(source[block.elseEnd:block.endifStart], " \t\n\r")
+			}
+		}
+
+		replacement = strings.TrimSpace(replacement)
+		if replacement != "" {
+			replacement = "\n" + replacement + "\n"
+		}
+
+		source = source[:block.ifStart] + replacement + source[block.endifEnd:]
+	}
+
+	return source
+}
+
+// PreProcessingCreateSymbolTable - scans the source code for %define directives and builds
+// a symbol table mapping each defined symbol name to true.
+// Macro names from the provided macro table are also added as defined symbols.
+// It returns the symbol table for use in conditional assembly processing.
+//
+// Only valid identifier names are accepted as symbols; any malformed %define directive
+// is a pre-processing error.
+//
+// The function works in three passes:
+//  1. Collect all %define directives and their line numbers, validating each symbol name.
+//     Panics if a symbol name is empty or not a valid identifier.
+//  2. Detect duplicate %define directives and panic if any are found.
+//  3. Add all macro names from the macro table as defined symbols.
+//     Returns the completed symbol table.
+func PreProcessingCreateSymbolTable(source string, macroTable map[string]Macro) map[string]bool {
+	// Match lines of the form: %define SYMBOL_NAME
+	defineRegex := regexp.MustCompile(`(?m)^\s*%define\s+(\w+)\s*$`)
+	matches := defineRegex.FindAllStringSubmatchIndex(source, -1)
+
+	type symbolEntry struct {
+		name       string // symbol name
+		lineNumber int    // line number of the %define directive (for error reporting)
+	}
+
+	// Pre-allocate with known capacity to avoid repeated slice growth
+	entries := make([]symbolEntry, 0, len(matches))
+
+	// Pass 1: collect all %define directives before building the symbol table,
+	// so that line numbers remain accurate.
+	// Only valid identifier names are accepted; empty or malformed names are a pre-processing error.
+	for _, matchIdx := range matches {
+		if len(matchIdx) < 4 {
+			continue
+		}
+
+		matchStart := matchIdx[0]
+		lineNumber := strings.Count(source[:matchStart], "\n") + 1
+
+		symbolName := source[matchIdx[2]:matchIdx[3]]
+
+		// Validate that the symbol name is a non-empty valid identifier
+		if symbolName == "" {
+			panic(fmt.Sprintf("pre-processing error: Empty symbol name in %%define at line %d", lineNumber))
+		}
+
+		entries = append(entries, symbolEntry{
+			name:       symbolName,
+			lineNumber: lineNumber,
+		})
+	}
+
+	// Pass 2: detect duplicate %define directives and build the symbol table.
+	// A symbol may only be defined once; duplicates are a pre-processing error.
+	seen := make(map[string]int, len(entries)) // maps symbol name to first line number
+	symbolTable := make(map[string]bool, len(entries)+len(macroTable))
+	for _, entry := range entries {
+		if firstLine, exists := seen[entry.name]; exists {
+			panic(fmt.Sprintf("pre-processing error: Duplicate %%define for symbol '%s' at line %d (first defined at line %d)",
+				entry.name, entry.lineNumber, firstLine))
+		}
+		seen[entry.name] = entry.lineNumber
+		symbolTable[entry.name] = true
+	}
+
+	// Pass 3: add all macro names from the macro table as defined symbols,
+	// so that %ifdef/%ifndef can test for macro existence.
+	for macroName := range macroTable {
+		symbolTable[macroName] = true
+	}
+
+	return symbolTable
+}

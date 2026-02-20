@@ -1,5 +1,4 @@
 %include "module.kasm"
-%include "module2.kasm"
 
 %macro een_macro 2
     mov rax, %1

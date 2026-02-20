@@ -95,6 +95,11 @@ var AssembleFileCmd = &cobra.Command{
 		kasm.PreProcessingColectMacroCalls(source, macros)
 		source = kasm.PreProcessingReplaceMacroCalls(source, macros)
 
+		// Handle conditional assembly macros in the source code.
+		//
+		symbolTable := kasm.PreProcessingCreateSymbolTable(source, macros)
+		source = kasm.PreProcessingHandleConditionals(source, symbolTable)
+
 		println(source)
 
 		//	==============================================================================
