@@ -8,11 +8,15 @@ type InstructionGroup struct {
 	Instructions map[string]Instruction
 }
 
-// ArchitectureGroupNew - creates a new instruction group with the given name and instructions
-func ArchitectureGroupNew(name string, instructions map[string]Instruction) *InstructionGroup {
+// FromSlice - creates a new instruction group from a slice of instructions.
+func FromSlice(name string, instructions []Instruction) *InstructionGroup {
+	instrMap := make(map[string]Instruction)
+	for _, instr := range instructions {
+		instrMap[instr.Mnemonic] = instr
+	}
 	return &InstructionGroup{
 		Name:         name,
-		Instructions: instructions,
+		Instructions: instrMap,
 	}
 }
 

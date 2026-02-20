@@ -1,0 +1,6 @@
+%macro module_macro2 2
+    mov rax, %1
+    mov rdi, %2
+    mov rsi, message
+    mov rdx, 13
+%endmacro

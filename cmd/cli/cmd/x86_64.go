@@ -6,10 +6,10 @@ import (
 )
 
 var x8664Cmd = &cobra.Command{
-	Use:     "64",
+	Use:     "_64",
 	GroupID: "arch",
-	Short:   "64 architecture",
-	Long:    `Functions related to the 64 architecture.`,
+	Short:   "_64 architecture",
+	Long:    `Functions related to the _64 architecture.`,
 }
 
 func init() {

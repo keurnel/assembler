@@ -1,6 +1,6 @@
 package lexer
 
-// X86_64Opcodes contains all valid 64 instruction mnemonics
+// X86_64Opcodes contains all valid _64 instruction mnemonics
 var X86_64Opcodes = map[string]bool{
 	// Data Transfer Instructions
 	"MOV":    true,

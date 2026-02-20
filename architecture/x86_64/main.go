@@ -14,7 +14,7 @@ type ParsedInstruction struct {
 	MachineCode []byte
 }
 
-// New - returns a new instance of the 64 assembler
+// New - returns a new instance of the _64 assembler
 func New(rawSource string) *Assembler {
 	return &Assembler{
 		rawSource: rawSource,

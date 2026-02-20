@@ -159,7 +159,7 @@ func TestTokenTypeDetermine(t *testing.T) {
 		{"Illegal token starting with 'kasm'", ".kasmDirective:", lexer.ILLEGAL_RESERVED, x86_64.New("")},
 	}
 
-	t.Run("Architecture: 64", func(t *testing.T) {
+	t.Run("Architecture: _64", func(t *testing.T) {
 		for _, scenario := range scenariosX86_64 {
 			t.Run(scenario.name, func(t *testing.T) {
 				tokenType := lexer.TokenTypeDetermine(scenario.literal, &scenario.architecture)
@@ -219,7 +219,7 @@ func TestIsOperand(t *testing.T) {
 		{"Valid immediate operand", "123", true, x86_64.New("")},
 	}
 
-	t.Run("Architecture: 64", func(t *testing.T) {
+	t.Run("Architecture: _64", func(t *testing.T) {
 		for _, scenario := range scenarios {
 			t.Run(scenario.name, func(t *testing.T) {
 				isOperand := lexer.IsOperand(scenario.operand, scenario.architecture)

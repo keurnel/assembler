@@ -7,8 +7,8 @@ const (
 	Register8       RegisterType = iota // 8-bit register
 	Register16                          // 16-bit register
 	Register32                          // 32-bit register
-	Register64                          // 64-bit register
-	RegisterMMX                         // MMX register (64-bit)
+	Register64                          // _64-bit register
+	RegisterMMX                         // MMX register (_64-bit)
 	RegisterXMM                         // XMM register (128-bit)
 	RegisterYMM                         // YMM register (256-bit)
 	RegisterZMM                         // ZMM register (512-bit)
@@ -17,14 +17,14 @@ const (
 	RegisterDebug                       // Debug register
 )
 
-// Register represents an 64 register
+// Register represents an _64 register
 type Register struct {
 	Name     string
 	Type     RegisterType
 	Encoding byte // Register encoding value
 }
 
-// General Purpose Registers - 64-bit
+// General Purpose Registers - _64-bit
 var (
 	RAX = Register{Name: "rax", Type: Register64, Encoding: 0}
 	RCX = Register{Name: "rcx", Type: Register64, Encoding: 1}
@@ -237,7 +237,7 @@ var (
 
 // RegistersByName is a map for looking up registers by their name
 var RegistersByName = map[string]Register{
-	// 64-bit
+	// _64-bit
 	"rax": RAX, "rcx": RCX, "rdx": RDX, "rbx": RBX,
 	"rsp": RSP, "rbp": RBP, "rsi": RSI, "rdi": RDI,
 	"r8": R8, "r9": R9, "r10": R10, "r11": R11,

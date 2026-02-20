@@ -1,5 +1,11 @@
 package architecture
 
+// InstructionProvider - defines the contract for providing instructions.
+type InstructionProvider interface {
+	Group() string
+	Provide() []Instruction
+}
+
 // Instruction - represents a single instruction in a CPU architecture.
 type Instruction struct {
 	// Mnemonic - is the human-readable name of the instruction (e.g., "MOV", "ADD", "JMP")
@@ -14,18 +20,6 @@ type Instruction struct {
 	Flags []string
 	// Variants - the different encoding forms this instruction can take
 	Variants []InstructionVariant
-}
-
-// ArchitectureInstructionNew - creates a new instruction with the given properties
-func ArchitectureInstructionNew(mnemonic string, opcode uint8, operands []string, description string, flags []string, variants []InstructionVariant) *Instruction {
-	return &Instruction{
-		Mnemonic:    mnemonic,
-		Opcode:      opcode,
-		Operands:    operands,
-		Description: description,
-		Flags:       flags,
-		Variants:    variants,
-	}
 }
 
 // Validate - performs validation checks against the instruction's properties and variants to ensure they conform

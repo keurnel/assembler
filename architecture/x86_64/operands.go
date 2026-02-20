@@ -27,7 +27,7 @@ var (
 		Type:       "register",
 		Size:       32,
 	}
-	// OperandReg64 - 64-bit register
+	// OperandReg64 - _64-bit register
 	OperandReg64 asm.OperandType = asm.OperandType{
 		Identifier: "reg64",
 		Type:       "register",
@@ -51,7 +51,7 @@ var (
 		Type:       "immediate",
 		Size:       32,
 	}
-	// OperandImm64 - 64-bit immediate value
+	// OperandImm64 - _64-bit immediate value
 	OperandImm64 asm.OperandType = asm.OperandType{
 		Identifier: "imm64",
 		Type:       "immediate",
@@ -81,7 +81,7 @@ var (
 		Type:       "memory",
 		Size:       32,
 	}
-	// OperandMem64 - 64-bit memory operand
+	// OperandMem64 - _64-bit memory operand
 	OperandMem64 asm.OperandType = asm.OperandType{
 		Identifier: "mem64",
 		Type:       "memory",

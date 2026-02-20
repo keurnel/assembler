@@ -4,7 +4,7 @@ package asm
 type OperandType struct {
 	Identifier string // Human understandable identifier for the operand type (e.g., "reg8", "imm32", "mem64")
 	Type       string // Type of the operand. (e.g., "register", "immediate", "memory")
-	Size       int    // Size of bits for the operand (e.g., 8, 16, 32, 64)
+	Size       int    // Size of bits for the operand (e.g., 8, 16, 32, _64)
 }
 
 // Identifier - returns the identifier of the operand

@@ -4,17 +4,19 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/keurnel/assembler/architecture/x86_64"
 	"github.com/keurnel/assembler/internal/asm"
 	"github.com/keurnel/assembler/internal/keurnel_asm"
+	"github.com/keurnel/assembler/v0/architecture"
+	"github.com/keurnel/assembler/v0/architecture/x86/_64"
+	"github.com/keurnel/assembler/v0/kasm"
 	"github.com/spf13/cobra"
 )
 
 var AssembleFileCmd = &cobra.Command{
 	Use:     "assemble-file <assembly-file>",
 	GroupID: "file-operations",
-	Short:   "Assemble an 64 assembly file into a binary file.",
-	Long:    `Assemble an 64 assembly file into a binary file.`,
+	Short:   "Assemble an _64 assembly file into a binary file.",
+	Long:    `Assemble an _64 assembly file into a binary file.`,
 	Run: func(cmd *cobra.Command, args []string) {
 
 		if len(args) < 1 {
@@ -41,7 +43,7 @@ var AssembleFileCmd = &cobra.Command{
 			return
 		}
 
-		// Read the raw assembly source code from the specified file and create a new instance of the 64 assembler
+		// Read content of singular assembly file
 		//
 		sourceBytes, err := os.ReadFile(fullPath)
 		if err != nil {
@@ -50,13 +52,56 @@ var AssembleFileCmd = &cobra.Command{
 		}
 		source := string(sourceBytes)
 
-		assemblerContext := x86_64.AssemblerNew(source)
-
-		// Assemble file using the assembler context.
+		//	==============================================================================
 		//
-		binary, err := assembleFile(assemblerContext.RawSource(), assemblerContext)
+		//	Loading architecture instructions
+		//
+		//	==============================================================================
 
-		println(binary)
+		groups := make(map[string]architecture.InstructionGroup)
+		for groupName, instructions := range _64.Instructions() {
+			groups[groupName] = *architecture.FromSlice(groupName, instructions)
+		}
+
+		//	==============================================================================
+		//
+		//	Verifying the instructions to ensure correctness and validity
+		//
+		//	==============================================================================
+
+		// todo: implement instruction verification logic here
+
+		//	==============================================================================
+		//
+		//	Pre-processing of the assembly source code
+		//
+		//	==============================================================================
+
+		// Handle inclusion of other `.kasm` files in the source code.
+		//
+		source, inclusions := kasm.PreProcessingHandleIncludes(source)
+		inclusionPaths := make(map[string]bool)
+		for _, inclusion := range inclusions {
+			if inclusionPaths[inclusion.IncludedFilePath] {
+				message := "pre-processing error: Circular inclusion detected for file '" + inclusion.IncludedFilePath + "' at line " + string(inclusion.LineNumber)
+				panic(message)
+			}
+			inclusionPaths[inclusion.IncludedFilePath] = true
+		}
+
+		// Handle macros in the source code.
+		//
+		macros := kasm.PreProcessingMacroTable(source)
+		kasm.PreProcessingColectMacroCalls(source, macros)
+		source = kasm.PreProcessingReplaceMacroCalls(source, macros)
+
+		println(source)
+
+		//	==============================================================================
+		//
+		//	Assembling the source code into machine code
+		//
+		//	==============================================================================
 
 		return
 	},
@@ -146,9 +191,9 @@ func assembleFile(source string, ctx asm.Architecture) (string, error) {
 //	source = asm.PreProcessingRemoveEmptyLines(source)
 //
 //	// Assemble the pre-processed assembly code into machine code using
-//	// the 64 assembler.
+//	// the _64 assembler.
 //	//
-//	assembler := 64.New(source)
+//	assembler := _64.New(source)
 //	machineCode, err := assembler.Assemble()
 //	if err != nil {
 //		return "", err

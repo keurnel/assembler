@@ -11,7 +11,7 @@ type Assembler struct {
 	rawSource string
 }
 
-// AssemblerNew - returns a new instance of the 64 assembler
+// AssemblerNew - returns a new instance of the _64 assembler
 func AssemblerNew(rawSource string) *Assembler {
 	return &Assembler{
 		rawSource: rawSource,
@@ -20,7 +20,7 @@ func AssemblerNew(rawSource string) *Assembler {
 
 // ArchitectureName - returns the name of the architecture
 func (a *Assembler) ArchitectureName() string {
-	return "64"
+	return "_64"
 }
 
 // Directives - returns the supported directives for the architecture
@@ -355,10 +355,10 @@ func (a *Assembler) Operands() map[string]asm.OperandType {
 		"[R15]": OperandMem64,
 
 		// X86_64 - memory operands with displacement
-		"[RBP-8]":  OperandMem64,
-		"[RBP-16]": OperandMem64,
-		"[RBP-32]": OperandMem64,
-		"[RBP-64]": OperandMem64,
+		"[RBP-8]":   OperandMem64,
+		"[RBP-16]":  OperandMem64,
+		"[RBP-32]":  OperandMem64,
+		"[RBP-_64]": OperandMem64,
 
 		// X86_8 - immediate operands
 		"IMM8": OperandImm8,
@@ -458,7 +458,7 @@ func (a *Assembler) IsValidOperandCount(count int) bool {
 
 // SourceOperandSupportsDestination - checks if a given source operand type can be used with a given destination operand type in an instruction
 func (a *Assembler) SourceOperandSupportsDestination(sourceType, destType asm.OperandType) bool {
-	// todo: implement this function based on the rules of operand compatibility for 64 instructions
+	// todo: implement this function based on the rules of operand compatibility for _64 instructions
 	return false
 }
 
