@@ -49,7 +49,7 @@ func PreProcessingMacroTable(source string) map[string]Macro {
 		//
 		parameters := make(map[string]MacroParameter)
 		for i := 1; i <= paramCount; i++ {
-			paramName := "param" + string('A'+i-1) // Generate parameter names like paramA, paramB, etc.
+			paramName := fmt.Sprintf("param%c", 'A'+i-1) // Generate parameter names like paramA, paramB, etc.
 			parameters[paramName] = MacroParameter{
 				Name: paramName,
 			}
