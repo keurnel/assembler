@@ -1,8 +1,10 @@
 package kasm_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/keurnel/assembler/v0/kasm"
@@ -171,5 +173,89 @@ func TestPreProcessingHandleIncludes_TrimWhitespace(t *testing.T) {
 	// Should not start with newline inside FILE block (trimmed)
 	if !containsSubstring(result, "; FILE: "+includePath+"\nmov rax, 1\n; END FILE:") {
 		t.Errorf("expected trimmed content in result, got:\n%s", result)
+	}
+}
+
+func BenchmarkPreProcessingHandleIncludes_NoIncludes(b *testing.B) {
+	source := "mov rax, 1\nmov rdi, 0\nsyscall\n"
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingHandleIncludes(source)
+	}
+}
+
+func BenchmarkPreProcessingHandleIncludes_SingleInclude(b *testing.B) {
+	tmpDir := b.TempDir()
+	path := filepath.Join(tmpDir, "module.kasm")
+	os.WriteFile(path, []byte("mov rax, 1\nmov rdi, 0\nsyscall"), 0644)
+
+	source := `%include "` + path + `"`
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingHandleIncludes(source)
+	}
+}
+
+func BenchmarkPreProcessingHandleIncludes_MultipleIncludes(b *testing.B) {
+	tmpDir := b.TempDir()
+	var sb strings.Builder
+	for i := 0; i < 5; i++ {
+		path := filepath.Join(tmpDir, fmt.Sprintf("module_%d.kasm", i))
+		os.WriteFile(path, []byte(fmt.Sprintf("mov rax, %d\nmov rdi, 0\nsyscall", i)), 0644)
+		sb.WriteString(fmt.Sprintf("%%include \"%s\"\n", path))
+	}
+	source := sb.String()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingHandleIncludes(source)
+	}
+}
+
+func BenchmarkPreProcessingHandleIncludes_LargeIncludedFile(b *testing.B) {
+	tmpDir := b.TempDir()
+	path := filepath.Join(tmpDir, "large.kasm")
+
+	var content strings.Builder
+	for i := 0; i < 500; i++ {
+		content.WriteString(fmt.Sprintf("mov r%d, %d\n", i%16, i))
+	}
+	os.WriteFile(path, []byte(content.String()), 0644)
+
+	source := `%include "` + path + `"`
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingHandleIncludes(source)
+	}
+}
+
+func BenchmarkPreProcessingHandleIncludes_ManyIncludes(b *testing.B) {
+	tmpDir := b.TempDir()
+	var sb strings.Builder
+	for i := 0; i < 20; i++ {
+		path := filepath.Join(tmpDir, fmt.Sprintf("mod_%d.kasm", i))
+		os.WriteFile(path, []byte(fmt.Sprintf("mov rax, %d", i)), 0644)
+		sb.WriteString(fmt.Sprintf("%%include \"%s\"\n", path))
+	}
+	source := sb.String()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingHandleIncludes(source)
+	}
+}
+
+func BenchmarkPreProcessingHandleIncludes_IncludeDeepInSource(b *testing.B) {
+	tmpDir := b.TempDir()
+	path := filepath.Join(tmpDir, "tail.kasm")
+	os.WriteFile(path, []byte("mov rax, 1"), 0644)
+
+	var sb strings.Builder
+	for i := 0; i < 200; i++ {
+		sb.WriteString(fmt.Sprintf("; line %d\n", i))
+	}
+	sb.WriteString(`%include "` + path + `"`)
+	source := sb.String()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingHandleIncludes(source)
 	}
 }

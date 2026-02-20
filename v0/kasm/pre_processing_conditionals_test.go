@@ -1,6 +1,7 @@
 package kasm_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -318,5 +319,121 @@ mov rax, 0
 	}
 	if !containsSubstring(result, "mov rax, 0") {
 		t.Error("expected else branch when symbol is defined")
+	}
+}
+
+func BenchmarkPreProcessingHandleConditionals_NoDirectives(b *testing.B) {
+	source := "mov rax, 1\nmov rdi, 0\nsyscall\n"
+	symbols := map[string]bool{}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingHandleConditionals(source, symbols)
+	}
+}
+
+func BenchmarkPreProcessingHandleConditionals_SingleIfdefTrue(b *testing.B) {
+	source := `%ifdef DEBUG
+mov rax, 1
+%endif`
+	symbols := map[string]bool{"DEBUG": true}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingHandleConditionals(source, symbols)
+	}
+}
+
+func BenchmarkPreProcessingHandleConditionals_SingleIfdefFalse(b *testing.B) {
+	source := `%ifdef DEBUG
+mov rax, 1
+%endif`
+	symbols := map[string]bool{}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingHandleConditionals(source, symbols)
+	}
+}
+
+func BenchmarkPreProcessingHandleConditionals_WithElseBranch(b *testing.B) {
+	source := `%ifdef DEBUG
+mov rax, 1
+%else
+mov rax, 0
+%endif`
+	symbols := map[string]bool{"DEBUG": true}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingHandleConditionals(source, symbols)
+	}
+}
+
+func BenchmarkPreProcessingHandleConditionals_Ifndef(b *testing.B) {
+	source := `%ifndef RELEASE
+mov rax, 1
+%else
+mov rax, 0
+%endif`
+	symbols := map[string]bool{}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingHandleConditionals(source, symbols)
+	}
+}
+
+func BenchmarkPreProcessingHandleConditionals_MultipleBlocks(b *testing.B) {
+	source := `mov rax, 0
+%ifdef DEBUG
+mov rbx, 1
+%endif
+mov rcx, 2
+%ifndef RELEASE
+mov rdx, 3
+%else
+mov rdx, 4
+%endif
+mov rsi, 5`
+	symbols := map[string]bool{"DEBUG": true}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingHandleConditionals(source, symbols)
+	}
+}
+
+func BenchmarkPreProcessingHandleConditionals_ManyBlocks(b *testing.B) {
+	var sb strings.Builder
+	symbols := map[string]bool{}
+	for i := 0; i < 50; i++ {
+		sym := fmt.Sprintf("SYM_%d", i)
+		if i%2 == 0 {
+			symbols[sym] = true
+		}
+		sb.WriteString(fmt.Sprintf("%%ifdef %s\nmov rax, %d\n%%endif\n", sym, i))
+	}
+	source := sb.String()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingHandleConditionals(source, symbols)
+	}
+}
+
+func BenchmarkPreProcessingHandleConditionals_LargeBody(b *testing.B) {
+	var sb strings.Builder
+	sb.WriteString("%ifdef DEBUG\n")
+	for i := 0; i < 500; i++ {
+		sb.WriteString(fmt.Sprintf("mov r%d, %d\n", i%16, i))
+	}
+	sb.WriteString("%endif\n")
+	source := sb.String()
+	symbols := map[string]bool{"DEBUG": true}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingHandleConditionals(source, symbols)
+	}
+}
+
+func BenchmarkPreProcessingHandleConditionals_EmptySource(b *testing.B) {
+	symbols := map[string]bool{}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingHandleConditionals("", symbols)
 	}
 }

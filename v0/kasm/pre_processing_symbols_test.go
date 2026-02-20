@@ -1,6 +1,8 @@
 package kasm_test
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/keurnel/assembler/v0/kasm"
@@ -216,5 +218,102 @@ func TestPreProcessingCreateSymbolTable_IgnoresInlineMacroDirectives(t *testing.
 	// macro directive is not a define directive
 	if symbols["my_macro"] {
 		t.Error("expected 'my_macro' to NOT be in symbol table (not via define)")
+	}
+}
+
+func BenchmarkPreProcessingCreateSymbolTable_NoDefines(b *testing.B) {
+	source := "mov rax, 1\nmov rdi, 0\nsyscall\n"
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingCreateSymbolTable(source, nil)
+	}
+}
+
+func BenchmarkPreProcessingCreateSymbolTable_SingleDefine(b *testing.B) {
+	source := "%define DEBUG\nmov rax, 1\n"
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingCreateSymbolTable(source, nil)
+	}
+}
+
+func BenchmarkPreProcessingCreateSymbolTable_ManyDefines(b *testing.B) {
+	var sb strings.Builder
+	for i := 0; i < 50; i++ {
+		sb.WriteString(fmt.Sprintf("%%define SYM_%d\n", i))
+	}
+	source := sb.String()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingCreateSymbolTable(source, nil)
+	}
+}
+
+func BenchmarkPreProcessingCreateSymbolTable_DefinesAtEnd(b *testing.B) {
+	var sb strings.Builder
+	for i := 0; i < 300; i++ {
+		sb.WriteString(fmt.Sprintf("mov r%d, %d\n", i%16, i))
+	}
+	for i := 0; i < 10; i++ {
+		sb.WriteString(fmt.Sprintf("%%define SYM_%d\n", i))
+	}
+	source := sb.String()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingCreateSymbolTable(source, nil)
+	}
+}
+
+func BenchmarkPreProcessingCreateSymbolTable_WithMacroTable(b *testing.B) {
+	source := "%define DEBUG\n%define RELEASE\n"
+	macroTable := make(map[string]kasm.Macro, 20)
+	for i := 0; i < 20; i++ {
+		name := fmt.Sprintf("macro_%d", i)
+		macroTable[name] = kasm.Macro{Name: name}
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingCreateSymbolTable(source, macroTable)
+	}
+}
+
+func BenchmarkPreProcessingCreateSymbolTable_OnlyMacroTable(b *testing.B) {
+	macroTable := make(map[string]kasm.Macro, 50)
+	for i := 0; i < 50; i++ {
+		name := fmt.Sprintf("macro_%d", i)
+		macroTable[name] = kasm.Macro{Name: name}
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingCreateSymbolTable("", macroTable)
+	}
+}
+
+func BenchmarkPreProcessingCreateSymbolTable_LargeSource_NoDefines(b *testing.B) {
+	var sb strings.Builder
+	for i := 0; i < 1000; i++ {
+		sb.WriteString(fmt.Sprintf("mov r%d, %d\n", i%16, i))
+	}
+	source := sb.String()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingCreateSymbolTable(source, nil)
+	}
+}
+
+func BenchmarkPreProcessingCreateSymbolTable_ManyDefinesWithMacros(b *testing.B) {
+	var sb strings.Builder
+	for i := 0; i < 30; i++ {
+		sb.WriteString(fmt.Sprintf("%%define SYM_%d\n", i))
+	}
+	source := sb.String()
+	macroTable := make(map[string]kasm.Macro, 30)
+	for i := 0; i < 30; i++ {
+		name := fmt.Sprintf("macro_%d", i)
+		macroTable[name] = kasm.Macro{Name: name}
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingCreateSymbolTable(source, macroTable)
 	}
 }

@@ -1,6 +1,8 @@
 package kasm_test
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/keurnel/assembler/v0/kasm"
@@ -277,4 +279,225 @@ func indexOf(s, substr string) int {
 		}
 	}
 	return -1
+}
+
+// --- PreProcessingHasMacros ---
+
+func BenchmarkPreProcessingHasMacros_NoMacros(b *testing.B) {
+	source := "mov rax, 1\nmov rdi, 0\nsyscall\n"
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingHasMacros(source)
+	}
+}
+
+func BenchmarkPreProcessingHasMacros_WithMacro(b *testing.B) {
+	source := `%macro my_macro 2
+    mov rax, %1
+    mov rdi, %2
+%endmacro`
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingHasMacros(source)
+	}
+}
+
+func BenchmarkPreProcessingHasMacros_LargeSource_NoMacro(b *testing.B) {
+	var sb strings.Builder
+	for i := 0; i < 500; i++ {
+		sb.WriteString(fmt.Sprintf("mov r%d, %d\n", i%16, i))
+	}
+	source := sb.String()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingHasMacros(source)
+	}
+}
+
+func BenchmarkPreProcessingHasMacros_LargeSource_MacroAtEnd(b *testing.B) {
+	var sb strings.Builder
+	for i := 0; i < 500; i++ {
+		sb.WriteString(fmt.Sprintf("mov r%d, %d\n", i%16, i))
+	}
+	sb.WriteString("%macro tail_macro 1\n    mov rax, %1\n%endmacro\n")
+	source := sb.String()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingHasMacros(source)
+	}
+}
+
+// --- PreProcessingMacroTable ---
+
+func BenchmarkPreProcessingMacroTable_NoMacros(b *testing.B) {
+	source := "mov rax, 1\nmov rdi, 0\nsyscall\n"
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingMacroTable(source)
+	}
+}
+
+func BenchmarkPreProcessingMacroTable_SingleMacro(b *testing.B) {
+	source := `%macro my_macro 2
+    mov rax, %1
+    mov rdi, %2
+%endmacro`
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingMacroTable(source)
+	}
+}
+
+func BenchmarkPreProcessingMacroTable_ManyMacros(b *testing.B) {
+	var sb strings.Builder
+	for i := 0; i < 20; i++ {
+		sb.WriteString(fmt.Sprintf("%%macro macro_%d 2\n    mov rax, %%1\n    mov rbx, %%2\n%%endmacro\n", i))
+	}
+	source := sb.String()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingMacroTable(source)
+	}
+}
+
+func BenchmarkPreProcessingMacroTable_MacroWithLargeBody(b *testing.B) {
+	var body strings.Builder
+	body.WriteString("%macro big_macro 3\n")
+	for i := 0; i < 100; i++ {
+		body.WriteString(fmt.Sprintf("    mov r%d, %%1\n", i%16))
+	}
+	body.WriteString("%endmacro\n")
+	source := body.String()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingMacroTable(source)
+	}
+}
+
+// --- PreProcessingColectMacroCalls ---
+
+func BenchmarkPreProcessingColectMacroCalls_NoCalls(b *testing.B) {
+	source := `%macro my_macro 2
+    mov rax, %1
+    mov rdi, %2
+%endmacro
+mov rax, 1`
+	table := kasm.PreProcessingMacroTable(source)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// Reset calls each iteration by rebuilding the table
+		t2 := kasm.PreProcessingMacroTable(source)
+		kasm.PreProcessingColectMacroCalls(source, t2)
+		_ = t2
+	}
+	_ = table
+}
+
+func BenchmarkPreProcessingColectMacroCalls_SingleCall(b *testing.B) {
+	source := `%macro my_macro 2
+    mov rax, %1
+    mov rdi, %2
+%endmacro
+my_macro 1, 2`
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		table := kasm.PreProcessingMacroTable(source)
+		kasm.PreProcessingColectMacroCalls(source, table)
+	}
+}
+
+func BenchmarkPreProcessingColectMacroCalls_ManyCalls(b *testing.B) {
+	var sb strings.Builder
+	sb.WriteString("%macro my_macro 2\n    mov rax, %1\n    mov rdi, %2\n%endmacro\n")
+	for i := 0; i < 50; i++ {
+		sb.WriteString(fmt.Sprintf("my_macro %d, %d\n", i, i+1))
+	}
+	source := sb.String()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		table := kasm.PreProcessingMacroTable(source)
+		kasm.PreProcessingColectMacroCalls(source, table)
+	}
+}
+
+func BenchmarkPreProcessingColectMacroCalls_MultipleMacros(b *testing.B) {
+	var sb strings.Builder
+	for i := 0; i < 5; i++ {
+		sb.WriteString(fmt.Sprintf("%%macro mac_%d 1\n    mov rax, %%1\n%%endmacro\n", i))
+	}
+	for i := 0; i < 5; i++ {
+		for j := 0; j < 10; j++ {
+			sb.WriteString(fmt.Sprintf("mac_%d %d\n", i, j))
+		}
+	}
+	source := sb.String()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		table := kasm.PreProcessingMacroTable(source)
+		kasm.PreProcessingColectMacroCalls(source, table)
+	}
+}
+
+// --- PreProcessingReplaceMacroCalls ---
+
+func BenchmarkPreProcessingReplaceMacroCalls_SingleCall(b *testing.B) {
+	source := `%macro my_macro 2
+    mov rax, %1
+    mov rdi, %2
+%endmacro
+my_macro 1, 2`
+	table := kasm.PreProcessingMacroTable(source)
+	kasm.PreProcessingColectMacroCalls(source, table)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingReplaceMacroCalls(source, table)
+	}
+}
+
+func BenchmarkPreProcessingReplaceMacroCalls_ManyCalls(b *testing.B) {
+	var sb strings.Builder
+	sb.WriteString("%macro my_macro 2\n    mov rax, %1\n    mov rdi, %2\n%endmacro\n")
+	for i := 0; i < 50; i++ {
+		sb.WriteString(fmt.Sprintf("my_macro %d, %d\n", i, i+1))
+	}
+	source := sb.String()
+	table := kasm.PreProcessingMacroTable(source)
+	kasm.PreProcessingColectMacroCalls(source, table)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingReplaceMacroCalls(source, table)
+	}
+}
+
+func BenchmarkPreProcessingReplaceMacroCalls_LargeBody(b *testing.B) {
+	var body strings.Builder
+	body.WriteString("%macro big_macro 2\n")
+	for i := 0; i < 100; i++ {
+		body.WriteString(fmt.Sprintf("    mov r%d, %%1\n    add r%d, %%2\n", i%16, i%16))
+	}
+	body.WriteString("%endmacro\nbig_macro rax, rbx\n")
+	source := body.String()
+	table := kasm.PreProcessingMacroTable(source)
+	kasm.PreProcessingColectMacroCalls(source, table)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingReplaceMacroCalls(source, table)
+	}
+}
+
+func BenchmarkPreProcessingReplaceMacroCalls_MultipleMacros(b *testing.B) {
+	var sb strings.Builder
+	for i := 0; i < 5; i++ {
+		sb.WriteString(fmt.Sprintf("%%macro mac_%d 1\n    mov rax, %%1\n%%endmacro\n", i))
+	}
+	for i := 0; i < 5; i++ {
+		sb.WriteString(fmt.Sprintf("mac_%d %d\n", i, i*10))
+	}
+	source := sb.String()
+	table := kasm.PreProcessingMacroTable(source)
+	kasm.PreProcessingColectMacroCalls(source, table)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		kasm.PreProcessingReplaceMacroCalls(source, table)
+	}
 }

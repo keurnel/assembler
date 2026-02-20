@@ -15,38 +15,26 @@ import (
 //  2. Evaluate each conditional block and replace it with the appropriate branch content,
 //     or remove it entirely if the condition is not met.
 func PreProcessingHandleConditionals(source string, definedSymbols map[string]bool) string {
-	// Match %ifdef, %ifndef, %else, and %endif directives
+	if len(source) == 0 {
+		return source
+	}
+
 	directiveRegex := conditionalDirectiveRegex
 	matches := directiveRegex.FindAllStringSubmatchIndex(source, -1)
 
-	type conditionalBlock struct {
-		ifDirective string // "ifdef" or "ifndef"
-		symbol      string // symbol being tested
-		ifStart     int    // byte offset of the start of the %ifdef/%ifndef line
-		ifEnd       int    // byte offset of the end of the %ifdef/%ifndef line
-		elseStart   int    // byte offset of the start of the %else line (-1 if absent)
-		elseEnd     int    // byte offset of the end of the %else line (-1 if absent)
-		endifStart  int    // byte offset of the start of the %endif line
-		endifEnd    int    // byte offset of the end of the %endif line
-		lineNumber  int    // line number of the opening directive (for error reporting)
+	// Fast path: no directives found, return source unchanged.
+	if len(matches) == 0 {
+		return source
 	}
 
-	// Pass 1: validate and collect all conditional blocks.
-	// Uses a stack to match opening directives with their %endif.
-	type stackEntry struct {
-		directive  string
-		symbol     string
-		start      int
-		end        int
-		lineNumber int
-		elseStart  int
-		elseEnd    int
-	}
+	// Pre-compute a line number lookup table: lineOffsets[i] = byte offset where line i+1 starts.
+	// This avoids repeated strings.Count calls (O(n) each) per directive.
+	lineNumbers := precomputeLineNumbers(source, matches)
 
-	stack := make([]stackEntry, 0, len(matches))
+	stack := make([]stackEntry, 0, 4)
 	blocks := make([]conditionalBlock, 0, len(matches)/2)
 
-	for _, matchIdx := range matches {
+	for mi, matchIdx := range matches {
 		if len(matchIdx) < 6 {
 			continue
 		}
@@ -58,7 +46,7 @@ func PreProcessingHandleConditionals(source string, definedSymbols map[string]bo
 		if matchIdx[4] != matchIdx[5] {
 			symbol = source[matchIdx[4]:matchIdx[5]]
 		}
-		lineNumber := strings.Count(source[:matchStart], "\n") + 1
+		lineNumber := lineNumbers[mi]
 
 		switch directive {
 		case "ifdef", "ifndef":
@@ -71,7 +59,6 @@ func PreProcessingHandleConditionals(source string, definedSymbols map[string]bo
 				elseStart:  -1,
 				elseEnd:    -1,
 			})
-
 		case "else":
 			if len(stack) == 0 {
 				panic(fmt.Sprintf("pre-processing error: %%else without matching %%ifdef/%%ifndef at line %d", lineNumber))
@@ -82,14 +69,12 @@ func PreProcessingHandleConditionals(source string, definedSymbols map[string]bo
 			}
 			top.elseStart = matchStart
 			top.elseEnd = matchEnd
-
 		case "endif":
 			if len(stack) == 0 {
 				panic(fmt.Sprintf("pre-processing error: %%endif without matching %%ifdef/%%ifndef at line %d", lineNumber))
 			}
 			top := stack[len(stack)-1]
 			stack = stack[:len(stack)-1]
-
 			blocks = append(blocks, conditionalBlock{
 				ifDirective: top.directive,
 				symbol:      top.symbol,
@@ -104,46 +89,99 @@ func PreProcessingHandleConditionals(source string, definedSymbols map[string]bo
 		}
 	}
 
-	// Validate that all opened conditional blocks are closed.
 	if len(stack) > 0 {
 		top := stack[len(stack)-1]
 		panic(fmt.Sprintf("pre-processing error: %%ifdef/%%ifndef at line %d has no matching %%endif", top.lineNumber))
 	}
 
-	// Pass 2: evaluate each conditional block and replace with the appropriate branch.
-	// Process blocks in reverse order to preserve byte offsets during replacement.
-	for i := len(blocks) - 1; i >= 0; i-- {
-		block := blocks[i]
+	// Pass 2: build result in a single pass using a strings.Builder.
+	// Sort blocks by ifStart ascending, then walk source copying gaps and evaluated branches.
+	sortBlocksByStart(blocks)
+
+	var sb strings.Builder
+	sb.Grow(len(source))
+	cursor := 0
+
+	for _, block := range blocks {
+		// Copy source between previous block end and this block start
+		if block.ifStart > cursor {
+			sb.WriteString(source[cursor:block.ifStart])
+		}
 
 		conditionMet := definedSymbols[block.symbol]
 		if block.ifDirective == "ifndef" {
 			conditionMet = !conditionMet
 		}
 
-		var replacement string
+		var branch string
 		if block.elseStart == -1 {
-			// No %else branch: include body if condition met, otherwise remove the whole block.
 			if conditionMet {
-				replacement = strings.TrimRight(source[block.ifEnd:block.endifStart], " \t\n\r")
-			} else {
-				replacement = ""
+				branch = strings.TrimSpace(source[block.ifEnd:block.endifStart])
 			}
 		} else {
-			// Has %else branch: pick the appropriate branch.
 			if conditionMet {
-				replacement = strings.TrimRight(source[block.ifEnd:block.elseStart], " \t\n\r")
+				branch = strings.TrimSpace(source[block.ifEnd:block.elseStart])
 			} else {
-				replacement = strings.TrimRight(source[block.elseEnd:block.endifStart], " \t\n\r")
+				branch = strings.TrimSpace(source[block.elseEnd:block.endifStart])
 			}
 		}
 
-		replacement = strings.TrimSpace(replacement)
-		if replacement != "" {
-			replacement = "\n" + replacement + "\n"
+		if branch != "" {
+			sb.WriteByte('\n')
+			sb.WriteString(branch)
+			sb.WriteByte('\n')
 		}
 
-		source = source[:block.ifStart] + replacement + source[block.endifEnd:]
+		cursor = block.endifEnd
 	}
 
-	return source
+	// Copy remaining source after the last block
+	if cursor < len(source) {
+		sb.WriteString(source[cursor:])
+	}
+
+	return sb.String()
+}
+
+// precomputeLineNumbers computes the line number for each match in a single pass over source.
+func precomputeLineNumbers(source string, matches [][]int) []int {
+	// Collect all match start offsets and their indices
+	type offsetIndex struct {
+		offset int
+		index  int
+	}
+	items := make([]offsetIndex, 0, len(matches))
+	for i, m := range matches {
+		if len(m) >= 2 {
+			items = append(items, offsetIndex{offset: m[0], index: i})
+		}
+	}
+
+	// Sort by offset (they should already be in order from regex, but be safe)
+	// Already sorted since FindAllStringSubmatchIndex returns in order.
+
+	result := make([]int, len(matches))
+	line := 1
+	prev := 0
+	for _, item := range items {
+		// Count newlines between prev and item.offset
+		line += strings.Count(source[prev:item.offset], "\n")
+		result[item.index] = line
+		prev = item.offset
+	}
+	return result
+}
+
+// sortBlocksByStart sorts conditional blocks by ifStart in ascending order (insertion sort,
+// typically very few blocks).
+func sortBlocksByStart(blocks []conditionalBlock) {
+	for i := 1; i < len(blocks); i++ {
+		key := blocks[i]
+		j := i - 1
+		for j >= 0 && blocks[j].ifStart > key.ifStart {
+			blocks[j+1] = blocks[j]
+			j--
+		}
+		blocks[j+1] = key
+	}
 }

@@ -25,3 +25,25 @@ type PreProcessingInclusion struct {
 	IncludedFilePath string // Path of the included file
 	LineNumber       int    // Line number in the source code where the inclusion occurs (for error reporting and debugging)
 }
+
+type conditionalBlock struct {
+	ifDirective string
+	symbol      string
+	ifStart     int
+	ifEnd       int
+	elseStart   int
+	elseEnd     int
+	endifStart  int
+	endifEnd    int
+	lineNumber  int
+}
+
+type stackEntry struct {
+	directive  string
+	symbol     string
+	start      int
+	end        int
+	lineNumber int
+	elseStart  int
+	elseEnd    int
+}
