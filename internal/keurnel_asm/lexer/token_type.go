@@ -246,10 +246,8 @@ func isDirective(literal string, architecture asm.Architecture) (bool, error) {
 	// checking other rules.
 	//
 	knownDirectives := architecture.Directives()
-	for _, directive := range knownDirectives {
-		if literal == directive || literal == directive+":" {
-			return true, nil
-		}
+	if _, exists := knownDirectives[literal]; exists {
+		return true, nil
 	}
 
 	// 3. Check if the literal starts with a single dot followed by characters (e.g., my_directive) and does
@@ -276,25 +274,19 @@ func isDirective(literal string, architecture asm.Architecture) (bool, error) {
 
 // isCPUOpcode - checks if the given literal matches a known CPU opcode.
 func isCPUOpcode(literal string, architecture asm.Architecture) bool {
+	return architecture.IsInstruction(literal)
+}
 
-	// Get opcodes for the architecture. If the literal matches any of the opcodes, then it is an instruction and cannot be a directive.
-	opcodes := architecture.Instructions()
-
-	// Check if literal matches any of the opcodes for the architecture.
-	//
-	for opcode := range opcodes {
-		if literal == opcode {
-			return true
-		}
-	}
-
-	return false
+// IsOperand - checks if the given literal matches a known operand.
+func IsOperand(literal string, architecture asm.Architecture) bool {
+	return architecture.IsOperand(literal)
 }
 
 // isMachineInstruction - checks if the given literal matches a known machine instruction.
 func isMachineInstruction(literal string, architecture asm.Architecture) bool {
-	// This is a simplified check. In a real implementation, you would have a comprehensive list of machine instructions.
-	instructions := []string{"RAX", "RBX", "EAX", "EBX"}
+	// Use architecture specific register set to determine
+	// if the literal is a machine instruction.
+	instructions := architecture.Registers()
 	for _, instr := range instructions {
 		if literal == instr {
 			return true

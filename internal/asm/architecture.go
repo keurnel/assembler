@@ -6,15 +6,19 @@ type Architecture interface {
 	// ArchitectureName - returns the name of the architecture (e.g., "x86_64", "arm64", etc.).
 	ArchitectureName() string
 	// Directives - returns a list of supported directives for the architecture.
-	Directives() []string
+	Directives() map[string]bool
 	// IsDirective - checks if a given line of assembly code is a valid directive for the architecture.
 	IsDirective(line string) bool
 	// Instructions - returns a list of supported instructions for the architecture.
 	Instructions() map[string]Instruction
 	// IsInstruction - checks if a given line of assembly code is a valid instruction for the architecture.
 	IsInstruction(line string) bool
-	// RegisterSet - returns a list of supported registers for the architecture.
-	RegisterSet() []string
+	// Operands - returns a map of supported operands for the architecture.
+	Operands() map[string]OperandType
+	// IsOperand - checks if a given string is a valid operand for the architecture.
+	IsOperand(operand string) bool
+	// Registers - returns a list of supported registers for the architecture.
+	Registers() []string
 	// IsRegister - checks if a given string is a valid register for the architecture.
 	IsRegister(name string) bool
 	// OperandTypes - returns a list of supported operand types for the architecture.

@@ -170,3 +170,63 @@ func TestTokenTypeDetermine(t *testing.T) {
 		}
 	})
 }
+
+func TestIsOperand(t *testing.T) {
+
+	scenarios := []struct {
+		name         string
+		operand      string
+		expected     bool
+		architecture asm.Architecture
+	}{
+		{"Valid register operand", "RAX", true, x86_64.New("")},
+		{"Invalid operand format", "invalid_operand", false, x86_64.New("")},
+
+		// Base displacement operands
+		//
+		{"Valid memory operand", "[RBP-8]", true, x86_64.New("")},
+
+		// Base displacement operands with positive offsets
+		{"Valid memory operand with positive offset", "[RBP+8]", true, x86_64.New("")},
+		{"Valid memory operand with larger positive offset", "[RSP+16]", true, x86_64.New("")},
+		{"Valid memory operand with hex offset", "[RBX+0x10]", true, x86_64.New("")},
+
+		// Base displacement operands with negative offsets
+		{"Valid memory operand with negative offset", "[RBP-16]", true, x86_64.New("")},
+		{"Valid memory operand with larger negative offset", "[RSP-32]", true, x86_64.New("")},
+
+		// Base displacement operands without offset (register indirect)
+		{"Valid memory operand register indirect", "[RAX]", true, x86_64.New("")},
+		{"Valid memory operand register indirect RDI", "[RDI]", true, x86_64.New("")},
+
+		// Base + index operands
+		{"Valid memory operand base plus index", "[RBX+RCX]", true, x86_64.New("")},
+		{"Valid memory operand base plus index with offset", "[RBX+RCX+8]", true, x86_64.New("")},
+
+		// Scaled index operands
+		{"Valid memory operand with scaled index", "[RBX+RCX*4]", true, x86_64.New("")},
+		{"Valid memory operand with scaled index and offset", "[RBX+RCX*8+16]", true, x86_64.New("")},
+
+		// Direct memory addressing
+		{"Valid direct memory address", "[0x400000]", true, x86_64.New("")},
+
+		// Invalid operands
+		{"Invalid memory operand missing bracket", "RBP-8", false, x86_64.New("")},
+		{"Invalid memory operand extra bracket", "[[RBP-8]]", false, x86_64.New("")},
+
+		// Immediate values
+		//
+		{"Valid immediate operand", "123", true, x86_64.New("")},
+	}
+
+	t.Run("Architecture: x86_64", func(t *testing.T) {
+		for _, scenario := range scenarios {
+			t.Run(scenario.name, func(t *testing.T) {
+				isOperand := lexer.IsOperand(scenario.operand, scenario.architecture)
+				if isOperand != scenario.expected {
+					t.Errorf("Expected IsOperand to return %v for operand '%s', got %v", scenario.expected, scenario.operand, isOperand)
+				}
+			})
+		}
+	})
+}
