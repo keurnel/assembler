@@ -2,11 +2,8 @@ package x86_64
 
 import (
 	"fmt"
-	"log/slog"
 	"os"
 
-	"github.com/keurnel/assembler/internal/asm"
-	"github.com/keurnel/assembler/internal/keurnel_asm"
 	"github.com/keurnel/assembler/v0/architecture"
 	"github.com/keurnel/assembler/v0/architecture/x86/_64"
 	"github.com/keurnel/assembler/v0/kasm"
@@ -107,77 +104,16 @@ var AssembleFileCmd = &cobra.Command{
 		//
 		//	==============================================================================
 
+		// Lexical analysis
+		//
 		lexer := kasm.LexerNew(source)
 		tokens := lexer.Start()
 
-		// Print each token for debugging purposes
+		// Parsing
 		//
-		for _, token := range tokens {
-			fmt.Printf("Token: Type=%d, Literal=%s, Line=%d, Column=%d\n", token.Type.ToInt(), token.Literal, token.Line, token.Column)
-		}
 
 		return
 	},
-}
-
-func assembleFile(source string, ctx asm.Architecture) (string, error) {
-
-	lexer := keurnel_asm.LexerNew(source, &ctx)
-	lexer.Process()
-
-	parser := keurnel_asm.ParserNew(lexer)
-	err := parser.Parse()
-	if err != nil {
-		slog.Error("Parsing failed:", "error", err)
-		os.Exit(1)
-	}
-
-	// Print each group
-	//
-	for identifier, group := range parser.Groups() {
-		println("Group Identifier:", identifier)
-		println("Group Type:", group.Type)
-		println("Group uses:")
-		for _, ns := range group.Uses {
-			println("  -", ns)
-		}
-		println("Instructions:")
-		for _, instr := range group.Instructions {
-			println("  Mnemonic:", instr.Mnemonic)
-			println("  Operands:")
-			for _, operand := range instr.Operands {
-				println("    -", operand)
-			}
-		}
-
-		// Child groups (for namespaces)
-		if group.HasChildren() {
-			println("Child Groups:")
-			for childIdentifier, childGroup := range group.Children {
-				println("  Child Group Identifier:", childIdentifier)
-				println("  Child Group Type:", childGroup.Type)
-				println("  Instructions:")
-				for _, instr := range childGroup.Instructions {
-					println("    Mnemonic:", instr.Mnemonic)
-					println("    Operands:")
-					for _, operand := range instr.Operands {
-						println("      -", operand)
-					}
-				}
-			}
-		}
-
-		println()
-	}
-
-	semanticAnalyzer := keurnel_asm.SemanticAnalyzerNew(parser)
-	err = semanticAnalyzer.Analyze()
-	if err != nil {
-		slog.Error("Semantic analysis failed:", "error", err)
-		os.Exit(1)
-	}
-
-	return "", nil
 }
 
 //func assembleFile(filePath string) (string, error) {

@@ -263,18 +263,3 @@ func isHexDigit(ch byte) bool {
 func isWordChar(ch byte) bool {
 	return isLetter(ch) || isDigit(ch) || ch == '_' || ch == '.'
 }
-
-// itoa - minimal int-to-string without importing strconv.
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	buf := [20]byte{}
-	i := len(buf)
-	for n > 0 {
-		i--
-		buf[i] = byte('0' + n%10)
-		n /= 10
-	}
-	return string(buf[i:])
-}
