@@ -1,7 +1,10 @@
 package x86_64
 
 import (
+	"context"
 	"os"
+	"sync"
+	"time"
 
 	"github.com/keurnel/assembler/v0/architecture"
 	"github.com/keurnel/assembler/v0/architecture/x86/_64"
@@ -67,6 +70,48 @@ var AssembleFileCmd = &cobra.Command{
 		//	==============================================================================
 
 		// todo: implement instruction verification logic here
+
+		//	==============================================================================
+		//
+		//	Debug information for pre-processing and assembly setup.
+		//
+		//
+		//	==============================================================================
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		waitGroup := sync.WaitGroup{}
+
+		debugInformation := kasm.SourceDebugInformationMake(source)
+		canListen := debugInformation.CanListen()
+		if canListen != nil {
+			cmd.PrintErrln("Error: Failed to initialize debug information listener:", canListen)
+			return
+		}
+
+		waitGroup.Add(1)
+		go debugInformation.Listen(ctx, &waitGroup)
+
+		// Example expand of line number 20
+		debugInformation.ExpandLine(20, []int{21, 22, 23})
+		println(debugInformation.LineNumberToOrigin(23))
+
+		// Publish event o n the channel to expand line number 30 into 3 lines
+		debugInformation.ExpansionChannel <- kasm.ExpansionEvent{
+			LineNumber:         30,
+			ExpandedLinesCount: 3,
+		}
+
+		// Send close after 5 seconds
+		go func() {
+			time.Sleep(1 * time.Second)
+			cancel()
+		}()
+
+		waitGroup.Wait()
+
+		return
 
 		//	==============================================================================
 		//

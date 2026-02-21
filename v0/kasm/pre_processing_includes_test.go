@@ -15,7 +15,7 @@ import (
 func TestPreProcessingHandleIncludes_SingleInclude(t *testing.T) {
 	// Create a temporary .kasm file to include
 	tmpDir := t.TempDir()
-	includePath := filepath.Join(tmpDir, "module.kasm")
+	includePath := filepath.Join(tmpDir, "hulp.kasm")
 	os.WriteFile(includePath, []byte("mov rax, 1\nmov rdi, 0"), 0644)
 
 	source := `%include "` + includePath + `"`
@@ -103,7 +103,7 @@ func TestPreProcessingHandleIncludes_NonKasmExtension_Panics(t *testing.T) {
 
 func TestPreProcessingHandleIncludes_DuplicateInclude_Panics(t *testing.T) {
 	tmpDir := t.TempDir()
-	includePath := filepath.Join(tmpDir, "module.kasm")
+	includePath := filepath.Join(tmpDir, "hulp.kasm")
 	os.WriteFile(includePath, []byte("nop"), 0644)
 
 	defer func() {
@@ -146,7 +146,7 @@ func TestPreProcessingHandleIncludes_FileNotFound_Panics(t *testing.T) {
 
 func TestPreProcessingHandleIncludes_LineNumber(t *testing.T) {
 	tmpDir := t.TempDir()
-	includePath := filepath.Join(tmpDir, "module.kasm")
+	includePath := filepath.Join(tmpDir, "hulp.kasm")
 	os.WriteFile(includePath, []byte("nop"), 0644)
 
 	source := `; line 1
@@ -164,7 +164,7 @@ func TestPreProcessingHandleIncludes_LineNumber(t *testing.T) {
 
 func TestPreProcessingHandleIncludes_TrimWhitespace(t *testing.T) {
 	tmpDir := t.TempDir()
-	includePath := filepath.Join(tmpDir, "module.kasm")
+	includePath := filepath.Join(tmpDir, "hulp.kasm")
 	os.WriteFile(includePath, []byte("\n  mov rax, 1\n\n"), 0644)
 
 	source := `%include "` + includePath + `"`
@@ -186,7 +186,7 @@ func BenchmarkPreProcessingHandleIncludes_NoIncludes(b *testing.B) {
 
 func BenchmarkPreProcessingHandleIncludes_SingleInclude(b *testing.B) {
 	tmpDir := b.TempDir()
-	path := filepath.Join(tmpDir, "module.kasm")
+	path := filepath.Join(tmpDir, "hulp.kasm")
 	os.WriteFile(path, []byte("mov rax, 1\nmov rdi, 0\nsyscall"), 0644)
 
 	source := `%include "` + path + `"`

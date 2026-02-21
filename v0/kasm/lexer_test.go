@@ -310,7 +310,7 @@ func TestLexer_MultiLineProgram(t *testing.T) {
 }
 
 func TestLexer_ProgramWithDirectiveAndMacro(t *testing.T) {
-	source := `%include "module.kasm"
+	source := `%include "hulp.kasm"
 %define DEBUG
 _start:
     mov rax, 1`
@@ -318,7 +318,7 @@ _start:
 	tokens := kasm.LexerNew(source).Start()
 
 	requireToken(t, tokens[0], kasm.TokenDirective, "%include")
-	requireToken(t, tokens[1], kasm.TokenString, "module.kasm")
+	requireToken(t, tokens[1], kasm.TokenString, "hulp.kasm")
 	requireToken(t, tokens[2], kasm.TokenDirective, "%define")
 	requireToken(t, tokens[3], kasm.TokenIdentifier, "DEBUG")
 }
@@ -448,7 +448,7 @@ func BenchmarkLexer_SmallProgram(b *testing.B) {
 }
 
 func BenchmarkLexer_MediumProgram(b *testing.B) {
-	source := `%include "module.kasm"
+	source := `%include "hulp.kasm"
 %define DEBUG
 
 _start:
@@ -529,7 +529,7 @@ func BenchmarkLexer_ManyComments(b *testing.B) {
 
 func BenchmarkLexer_MixedContent(b *testing.B) {
 	source := `; Keurnel assembler mixed benchmark
-%include "module.kasm"
+%include "hulp.kasm"
 %define OS_LINUX
 %define STDOUT 1
 

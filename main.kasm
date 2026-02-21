@@ -1,20 +1,13 @@
-%include "module.kasm"
+%include "hulp.kasm"
 
-%macro een_macro 2
-    mov rax, %1
-    mov rdi, %2
-    mov rsi, message
-    mov rdx, 13
-%endmacro
+hulp_functie 1, 2
+hulp_functie 3, 4
+hulp_functie 5, 6
+hulp_functie 7, 8
 
-een_macro 1, 2
-een_macro 3, 4
-een_macro 5, 6
-module_macro 7, 8
-
-use voorbeeld
-
-_start:
+; Start routine van het programma
+.start:
+    ret
 
 
-namespace voorbeeld
+

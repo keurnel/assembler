@@ -1,9 +1,6 @@
-%include "module2.kasm"
-
-%macro module_macro 2
+%macro hulp_functie 2
     mov rax, %1
     mov rdi, %2
     mov rsi, message
     mov rdx, 13
 %endmacro
-
