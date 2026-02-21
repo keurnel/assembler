@@ -1,6 +1,7 @@
 package x86_64
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 
@@ -100,13 +101,20 @@ var AssembleFileCmd = &cobra.Command{
 		symbolTable := kasm.PreProcessingCreateSymbolTable(source, macros)
 		source = kasm.PreProcessingHandleConditionals(source, symbolTable)
 
-		println(source)
-
 		//	==============================================================================
 		//
 		//	Assembling the source code into machine code
 		//
 		//	==============================================================================
+
+		lexer := kasm.LexerNew(source)
+		tokens := lexer.Start()
+
+		// Print each token for debugging purposes
+		//
+		for _, token := range tokens {
+			fmt.Printf("Token: Type=%s, Literal=%s, Line=%d, Column=%d\n", token.Type, token.Literal, token.Line, token.Column)
+		}
 
 		return
 	},
