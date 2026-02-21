@@ -1,9 +1,33 @@
-%include "hulp.kasm"
+%macro hulp_functie 2
+    mov rax, %1
+    mov rdi, %2
+    mov rsi, message
+    mov rdx, 13
+%endmacro
 
-hulp_functie 1, 2
-hulp_functie 3, 4
-hulp_functie 5, 6
-hulp_functie 7, 8
+; hulp_functie 1, 2
+mov rax, 1
+mov rdi, 2
+mov rsi, message
+mov rdx, 13
+
+; hulp_functie 3, 4
+mov rax, 3
+mov rdi, 4
+mov rsi, message
+mov rdx, 13
+
+; hulp_functie 5, 6
+mov rax, 5
+mov rdi, 6
+mov rsi, message
+mov rdx, 13
+
+; hulp_functie 7, 8
+mov rax, 7
+mov rdi, 8
+mov rsi, message
+mov rdx, 13
 
 ; Start routine van het programma
 .start:
