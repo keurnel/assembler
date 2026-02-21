@@ -59,7 +59,7 @@ type Lexer struct {
 	Line   int // Current line number (for error reporting).
 	Column int // Current column number (for error reporting).
 
-	Tokens map[string]Token
+	Tokens []Token
 }
 
 func LexerNew(input string) *Lexer {
@@ -70,7 +70,7 @@ func LexerNew(input string) *Lexer {
 		Ch:           0,
 		Line:         1,
 		Column:       0,
-		Tokens:       make(map[string]Token),
+		Tokens:       make([]Token, 0),
 	}
 	l.readChar()
 	return l
@@ -182,25 +182,19 @@ func classifyWord(word string) TokenType {
 	return TokenIdentifier
 }
 
-// addToken - stores a token in the Tokens map, keyed by "line:column" to
-// preserve every occurrence (including duplicate literals).
+// addToken - appends a token to the Tokens slice.
 func (l *Lexer) addToken(tokenType TokenType, literal string, line, column int) {
-	key := strings.Join([]string{
-		strings.Repeat("0", 6-len(itoa(line))) + itoa(line),
-		strings.Repeat("0", 4-len(itoa(column))) + itoa(column),
-	}, ":")
-	l.Tokens[key] = Token{
+	l.Tokens = append(l.Tokens, Token{
 		Type:    tokenType,
 		Literal: literal,
 		Line:    line,
 		Column:  column,
-	}
+	})
 }
 
-// Start - begins the tokenization process and returns a map of tokens
-// found in the input source. Tokens are keyed by "line:column" so every
-// occurrence is preserved even when the same literal appears multiple times.
-func (l *Lexer) Start() map[string]Token {
+// Start - begins the tokenization process and returns a slice of tokens
+// found in the input source, in the order they appear.
+func (l *Lexer) Start() []Token {
 	for l.Ch != 0 {
 		line := l.Line
 		col := l.Column
