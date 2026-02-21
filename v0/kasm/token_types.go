@@ -21,6 +21,11 @@ const (
 
 type TokenType int
 
+// ToInt - converts the TokenType to its underlying integer value.
+func (tT TokenType) ToInt() int {
+	return int(tT)
+}
+
 // Ignored - used to determine if a token should be ignored during parsing (e.g., whitespace, comments).
 func (tT TokenType) Ignored() bool {
 	switch tT {

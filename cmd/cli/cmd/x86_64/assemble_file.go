@@ -113,7 +113,7 @@ var AssembleFileCmd = &cobra.Command{
 		// Print each token for debugging purposes
 		//
 		for _, token := range tokens {
-			fmt.Printf("Token: Type=%s, Literal=%s, Line=%d, Column=%d\n", token.Type, token.Literal, token.Line, token.Column)
+			fmt.Printf("Token: Type=%d, Literal=%s, Line=%d, Column=%d\n", token.Type.ToInt(), token.Literal, token.Line, token.Column)
 		}
 
 		return
