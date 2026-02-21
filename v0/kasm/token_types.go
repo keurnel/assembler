@@ -17,6 +17,8 @@ const (
 	TokenImmediate
 	// TokenString - represents a string literal (e.g., "Hello, World!").
 	TokenString
+	// TokenKeyword - represents a reserved keyword in the assembly language (e.g., namespace).
+	TokenKeyword
 )
 
 type TokenType int

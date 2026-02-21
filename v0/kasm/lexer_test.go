@@ -49,17 +49,12 @@ func TestLexer_WhitespaceOnly(t *testing.T) {
 
 func TestLexer_Comment(t *testing.T) {
 	tokens := kasm.LexerNew("; this is a comment").Start()
-	requireTokenCount(t, tokens, 1)
-	requireToken(t, tokens[0], kasm.TokenComment, "; this is a comment")
+	requireTokenCount(t, tokens, 0)
 }
 
 func TestLexer_CommentAfterNewline(t *testing.T) {
 	tokens := kasm.LexerNew("\n; line two comment").Start()
-	requireTokenCount(t, tokens, 1)
-	requireToken(t, tokens[0], kasm.TokenComment, "; line two comment")
-	if tokens[0].Line != 2 {
-		t.Errorf("expected line 2, got %d", tokens[0].Line)
-	}
+	requireTokenCount(t, tokens, 0)
 }
 
 // ---------------------------------------------------------------------------
@@ -268,12 +263,11 @@ func TestLexer_MovRegReg(t *testing.T) {
 
 func TestLexer_InstructionWithComment(t *testing.T) {
 	tokens := kasm.LexerNew("mov rax, 1 ; set exit code").Start()
-	requireTokenCount(t, tokens, 5)
+	requireTokenCount(t, tokens, 4)
 	requireToken(t, tokens[0], kasm.TokenInstruction, "mov")
 	requireToken(t, tokens[1], kasm.TokenRegister, "rax")
 	requireToken(t, tokens[2], kasm.TokenIdentifier, ",")
 	requireToken(t, tokens[3], kasm.TokenImmediate, "1")
-	requireToken(t, tokens[4], kasm.TokenComment, "; set exit code")
 }
 
 func TestLexer_LabelFollowedByInstruction(t *testing.T) {
@@ -380,9 +374,7 @@ func TestLexer_DirectiveAlone(t *testing.T) {
 func TestLexer_ConsecutiveComments(t *testing.T) {
 	source := "; first\n; second"
 	tokens := kasm.LexerNew(source).Start()
-	requireTokenCount(t, tokens, 2)
-	requireToken(t, tokens[0], kasm.TokenComment, "; first")
-	requireToken(t, tokens[1], kasm.TokenComment, "; second")
+	requireTokenCount(t, tokens, 0)
 }
 
 func TestLexer_HexImmediateInInstruction(t *testing.T) {

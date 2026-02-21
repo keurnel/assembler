@@ -76,6 +76,15 @@ func LexerNew(input string) *Lexer {
 	return l
 }
 
+// previousTokenType - returns the type of the most recently emitted token, or an empty string if no tokens
+// have been emitted yet.
+func (l *Lexer) previousTokenType() TokenType {
+	if len(l.Tokens) == 0 {
+		return -1 // No tokens emitted yet
+	}
+	return l.Tokens[len(l.Tokens)-1].Type
+}
+
 // readChar - reads the next character from the input and advances the positions accordingly.
 func (l *Lexer) readChar() {
 	if l.ReadPosition >= len(l.Input) {
@@ -107,6 +116,14 @@ func (l *Lexer) peekChar() byte {
 // collecting them into a single whitespace token.
 func (l *Lexer) skipWhitespace() {
 	for l.Ch == ' ' || l.Ch == '\t' || l.Ch == '\r' || l.Ch == '\n' {
+		l.readChar()
+	}
+}
+
+// skipComment - advances past a comment starting with ';' to the end of the line,
+// collecting it into a single comment token.
+func (l *Lexer) skipComment() {
+	for l.Ch != '\n' && l.Ch != 0 {
 		l.readChar()
 	}
 }
@@ -171,7 +188,7 @@ func (l *Lexer) readDirective() string {
 }
 
 // classifyWord - determines whether a word is a register, instruction or identifier.
-func classifyWord(word string) TokenType {
+func classifyWord(word string, lexer *Lexer) TokenType {
 	lower := strings.ToLower(word)
 	if knownRegisters[lower] {
 		return TokenRegister
@@ -179,6 +196,21 @@ func classifyWord(word string) TokenType {
 	if knownInstructions[lower] {
 		return TokenInstruction
 	}
+
+	keywords := []string{"namespace"}
+	for _, kw := range keywords {
+		if lower == kw {
+			return TokenKeyword
+		}
+	}
+
+	// When previous token is a keyword (e.g. 'namespace'), treat the current
+	// word as an identifier
+	//
+	if lexer.previousTokenType() == TokenKeyword {
+		return TokenIdentifier
+	}
+
 	return TokenIdentifier
 }
 
@@ -204,10 +236,9 @@ func (l *Lexer) Start() []Token {
 		case l.Ch == ' ' || l.Ch == '\t' || l.Ch == '\r' || l.Ch == '\n':
 			l.skipWhitespace()
 
-		// Comment — everything from ';' to end of line.
+		// Comment — ';' to end of line.
 		case l.Ch == ';':
-			comment := l.readComment()
-			l.addToken(TokenComment, comment, line, col)
+			l.skipComment()
 
 		// Directive — '%' followed by a word.
 		case l.Ch == '%':
@@ -232,7 +263,7 @@ func (l *Lexer) Start() []Token {
 				word += ":"
 				l.readChar()
 			}
-			l.addToken(classifyWord(word), word, line, col)
+			l.addToken(classifyWord(word, l), word, line, col)
 
 		// Any other single character (commas, brackets, etc.) — emit as identifier.
 		default:

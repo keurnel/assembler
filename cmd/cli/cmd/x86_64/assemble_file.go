@@ -1,7 +1,6 @@
 package x86_64
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/keurnel/assembler/v0/architecture"
@@ -111,6 +110,12 @@ var AssembleFileCmd = &cobra.Command{
 
 		// Parsing
 		//
+		parser := kasm.ParserNew(tokens)
+		err = parser.Parse()
+		if err != nil {
+			cmd.PrintErrln("Error: Failed to parse assembly source code:", err)
+			return
+		}
 
 		return
 	},
