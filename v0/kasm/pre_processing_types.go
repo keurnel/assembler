@@ -26,6 +26,8 @@ type PreProcessingInclusion struct {
 	LineNumber       int    // Line number in the source code where the inclusion occurs (for error reporting and debugging)
 }
 
+// conditionalBlock - represents a single conditional assembly block found in the source code, including its directive
+// type, associated symbol, and the positions of its components for error reporting and debugging.
 type conditionalBlock struct {
 	ifDirective string
 	symbol      string
@@ -38,6 +40,7 @@ type conditionalBlock struct {
 	lineNumber  int
 }
 
+// stackEntry - represents an entry in the stack used to track nested conditional directives during pre-processing.
 type stackEntry struct {
 	directive  string
 	symbol     string

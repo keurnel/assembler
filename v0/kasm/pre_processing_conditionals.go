@@ -5,30 +5,34 @@ import (
 	"strings"
 )
 
-// PreProcessingHandleConditionals - processes %ifdef, %ifndef, %else, and %endif directives
-// in the source code, evaluating conditions based on the provided defined symbols map.
-// It returns the updated source code with the appropriate sections included or excluded.
-//
-// The function works in two passes:
-//  1. Validate the structure of all conditional directives, ensuring every %ifdef/%ifndef
-//     has a matching %endif, with at most one %else in between. Panics on structural errors.
-//  2. Evaluate each conditional block and replace it with the appropriate branch content,
-//     or remove it entirely if the condition is not met.
 func PreProcessingHandleConditionals(source string, definedSymbols map[string]bool) string {
+
+	// When the source is empty, there is nothing
+	// to process, so we can return it immediately.
+	//
 	if len(source) == 0 {
+		return source
+	}
+
+	// Quick check to skip regex processing if there
+	// are no conditional directives in the source code.
+	//
+	if !strings.Contains(source, "%ifdef") &&
+		!strings.Contains(source, "%ifndef") &&
+		!strings.Contains(source, "%endif") {
 		return source
 	}
 
 	directiveRegex := conditionalDirectiveRegex
 	matches := directiveRegex.FindAllStringSubmatchIndex(source, -1)
 
-	// Fast path: no directives found, return source unchanged.
+	// Uncommon case: if there are no matches, we can skip all the processing
+	// and return the original source immediately.
+	//
 	if len(matches) == 0 {
 		return source
 	}
 
-	// Pre-compute a line number lookup table: lineOffsets[i] = byte offset where line i+1 starts.
-	// This avoids repeated strings.Count calls (O(n) each) per directive.
 	lineNumbers := precomputeLineNumbers(source, matches)
 
 	stack := make([]stackEntry, 0, 4)
@@ -94,8 +98,6 @@ func PreProcessingHandleConditionals(source string, definedSymbols map[string]bo
 		panic(fmt.Sprintf("pre-processing error: %%ifdef/%%ifndef at line %d has no matching %%endif", top.lineNumber))
 	}
 
-	// Pass 2: build result in a single pass using a strings.Builder.
-	// Sort blocks by ifStart ascending, then walk source copying gaps and evaluated branches.
 	sortBlocksByStart(blocks)
 
 	var sb strings.Builder
@@ -103,7 +105,6 @@ func PreProcessingHandleConditionals(source string, definedSymbols map[string]bo
 	cursor := 0
 
 	for _, block := range blocks {
-		// Copy source between previous block end and this block start
 		if block.ifStart > cursor {
 			sb.WriteString(source[cursor:block.ifStart])
 		}
@@ -113,29 +114,38 @@ func PreProcessingHandleConditionals(source string, definedSymbols map[string]bo
 			conditionMet = !conditionMet
 		}
 
-		var branch string
+		var branchStart, branchEnd int
+		hasBranch := false
 		if block.elseStart == -1 {
 			if conditionMet {
-				branch = strings.TrimSpace(source[block.ifEnd:block.endifStart])
+				branchStart = block.ifEnd
+				branchEnd = block.endifStart
+				hasBranch = true
 			}
 		} else {
 			if conditionMet {
-				branch = strings.TrimSpace(source[block.ifEnd:block.elseStart])
+				branchStart = block.ifEnd
+				branchEnd = block.elseStart
 			} else {
-				branch = strings.TrimSpace(source[block.elseEnd:block.endifStart])
+				branchStart = block.elseEnd
+				branchEnd = block.endifStart
 			}
+			hasBranch = true
 		}
 
-		if branch != "" {
-			sb.WriteByte('\n')
-			sb.WriteString(branch)
-			sb.WriteByte('\n')
+		if hasBranch {
+			// Inline trim without allocation: find first/last non-whitespace byte offsets
+			s, e := trimSpaceBounds(source, branchStart, branchEnd)
+			if s < e {
+				sb.WriteByte('\n')
+				sb.WriteString(source[s:e])
+				sb.WriteByte('\n')
+			}
 		}
 
 		cursor = block.endifEnd
 	}
 
-	// Copy remaining source after the last block
 	if cursor < len(source) {
 		sb.WriteString(source[cursor:])
 	}
@@ -143,37 +153,41 @@ func PreProcessingHandleConditionals(source string, definedSymbols map[string]bo
 	return sb.String()
 }
 
-// precomputeLineNumbers computes the line number for each match in a single pass over source.
+// trimSpaceBounds returns the start and end indices within source[start:end]
+// (as absolute offsets) with leading/trailing whitespace removed, without allocating.
+func trimSpaceBounds(source string, start, end int) (int, int) {
+	for start < end && (source[start] == ' ' || source[start] == '\t' || source[start] == '\n' || source[start] == '\r') {
+		start++
+	}
+	for end > start && (source[end-1] == ' ' || source[end-1] == '\t' || source[end-1] == '\n' || source[end-1] == '\r') {
+		end--
+	}
+	return start, end
+}
+
+// precomputeLineNumbers computes the line number for each match in a single pass.
+// Uses direct byte scanning instead of strings.Count to avoid sub-slice overhead.
 func precomputeLineNumbers(source string, matches [][]int) []int {
-	// Collect all match start offsets and their indices
-	type offsetIndex struct {
-		offset int
-		index  int
-	}
-	items := make([]offsetIndex, 0, len(matches))
-	for i, m := range matches {
-		if len(m) >= 2 {
-			items = append(items, offsetIndex{offset: m[0], index: i})
-		}
-	}
-
-	// Sort by offset (they should already be in order from regex, but be safe)
-	// Already sorted since FindAllStringSubmatchIndex returns in order.
-
 	result := make([]int, len(matches))
 	line := 1
 	prev := 0
-	for _, item := range items {
-		// Count newlines between prev and item.offset
-		line += strings.Count(source[prev:item.offset], "\n")
-		result[item.index] = line
-		prev = item.offset
+	for i, m := range matches {
+		if len(m) < 2 {
+			continue
+		}
+		offset := m[0]
+		// Count newlines from prev to offset by scanning bytes directly
+		for j := prev; j < offset; j++ {
+			if source[j] == '\n' {
+				line++
+			}
+		}
+		result[i] = line
+		prev = offset
 	}
 	return result
 }
 
-// sortBlocksByStart sorts conditional blocks by ifStart in ascending order (insertion sort,
-// typically very few blocks).
 func sortBlocksByStart(blocks []conditionalBlock) {
 	for i := 1; i < len(blocks); i++ {
 		key := blocks[i]
