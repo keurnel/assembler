@@ -58,7 +58,8 @@ func runAssembleFile(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("assembly aborted: %d error(s) during pre-processing", len(debugCtx.Errors()))
 	}
 
-	_ = source
+	println(source)
+
 	return nil
 }
 
