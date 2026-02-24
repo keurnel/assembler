@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/keurnel/assembler/internal/lineMap"
 	"github.com/keurnel/assembler/v0/architecture"
 	"github.com/keurnel/assembler/v0/architecture/x86/_64"
 	"github.com/keurnel/assembler/v0/kasm"
@@ -111,15 +112,24 @@ var AssembleFileCmd = &cobra.Command{
 
 		waitGroup.Wait()
 
-		return
-
-		//	==============================================================================
+		// Initialize a lineMap instance to track how lines transform during
+		// pre-processing. This allows us to trace any line in the final
+		// processed source back to its original location in the source file.
 		//
-		//	Pre-processing of the assembly source code
-		//
-		//	==============================================================================
+		lineMapSource := lineMap.NewSource(fullPath)
+		lm, err := lineMap.New(source, lineMapSource)
+		if err != nil {
+			cmd.PrintErrln("Error: Failed to initialize line map:", err)
+			return
+		}
 
-		// Handle inclusion of other `.kasm` files in the source code.
+		err = lm.InitialIndex()
+		if err != nil {
+			cmd.PrintErrln("Error: Failed to create initial line map index:", err)
+			return
+		}
+
+		// Step 1: Handle inclusion of other `.kasm` files in the source code.
 		//
 		source, inclusions := kasm.PreProcessingHandleIncludes(source)
 		inclusionPaths := make(map[string]bool)
@@ -131,16 +141,51 @@ var AssembleFileCmd = &cobra.Command{
 			inclusionPaths[inclusion.IncludedFilePath] = true
 		}
 
-		// Handle macros in the source code.
+		// Snapshot after includes — lines may have expanded.
+		err = lm.Update(source)
+		if err != nil {
+			cmd.PrintErrln("Error: Line map update failed after include processing:", err)
+			return
+		}
+
+		// Step 2: Handle macros in the source code.
 		//
 		macros := kasm.PreProcessingMacroTable(source)
 		kasm.PreProcessingColectMacroCalls(source, macros)
 		source = kasm.PreProcessingReplaceMacroCalls(source, macros)
 
-		// Handle conditional assembly macros in the source code.
+		// Snapshot after macro expansion — lines may have expanded or contracted.
+		err = lm.Update(source)
+		if err != nil {
+			cmd.PrintErrln("Error: Line map update failed after macro processing:", err)
+			return
+		}
+
+		// Step 3: Handle conditional assembly directives in the source code.
 		//
 		symbolTable := kasm.PreProcessingCreateSymbolTable(source, macros)
 		source = kasm.PreProcessingHandleConditionals(source, symbolTable)
+
+		// Snapshot after conditional processing — lines may have been removed.
+		err = lm.Update(source)
+		if err != nil {
+			cmd.PrintErrln("Error: Line map update failed after conditional processing:", err)
+			return
+		}
+
+		// Print history of line transformations for debugging
+		lineHistory := lm.LineHistory(14)
+		for i, lineChange := range lineHistory {
+			println("Index:", i, lineChange.String())
+		}
+
+		return
+
+		//	==============================================================================
+		//
+		//	Pre-processing of the assembly source code
+		//
+		//	==============================================================================
 
 		//	==============================================================================
 		//
@@ -161,6 +206,11 @@ var AssembleFileCmd = &cobra.Command{
 			cmd.PrintErrln("Error: Failed to parse assembly source code:", err)
 			return
 		}
+
+		// The lineMap instance `lm` can now be used to trace any line in the
+		// assembled output back to its original source location:
+		//   originalLine := lm.LineOrigin(processedLine)
+		_ = lm
 
 		return
 	},

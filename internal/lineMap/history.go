@@ -70,6 +70,20 @@ func newLineChange(_type string, origin, rangeStart, rangeEnd int) (*LineChange,
 	}, nil
 }
 
+// String - returns a string representation of the LineChange for debugging purposes.
+func (lc *LineChange) String() string {
+	switch lc._type {
+	case LineSnapshotTypeExpanding:
+		return fmt.Sprintf("LineChange{Type: %s, Origin: %d, ExpandingRange: [%d-%d], ExpandingLines: %v}",
+			lc._type, lc.origin, lc.expandingRangeStart, lc.expandingRangeEnd, lc.expandingLines)
+	case LineSnapshotTypeContracting:
+		return fmt.Sprintf("LineChange{Type: %s, Origin: %d, ContractingRange: [%d-%d], ContractingLines: %v}",
+			lc._type, lc.origin, lc.contractingRangeStart, lc.contractingRangeEnd, lc.contractingLines)
+	default:
+		return fmt.Sprintf("LineChange{Type: %s, Origin: %d}", lc._type, lc.origin)
+	}
+}
+
 type LinesSnapshot struct {
 	_type   string
 	hash    string

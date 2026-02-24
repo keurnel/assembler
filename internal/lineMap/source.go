@@ -17,6 +17,11 @@ type Source struct {
 	content string
 }
 
+// NewSource - creates a new Source with the given file path.
+func NewSource(path string) Source {
+	return Source{path: path}
+}
+
 func (s *Source) Load() error {
 	// Check if file exists before loading.
 	//

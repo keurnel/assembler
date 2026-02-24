@@ -185,7 +185,7 @@ func (i *Instance) changes(newValue string) (map[int]LineChange, error) {
 		changes[ni] = *change
 		ni++
 	}
-	
+
 	return changes, nil
 }
 
@@ -289,4 +289,52 @@ func (i *Instance) Lines() []string {
 // Returns nil if history is empty.
 func (i *Instance) LatestSnapshot() *LinesSnapshot {
 	return i.history.latest()
+}
+
+// LineHistory - returns how a line is evolved over the snapshots in the history. It returns a slice of
+// LineChange structs that represent the state of the line in each snapshot (e.g. unchanged, expanded, contracted).
+func (i *Instance) LineHistory(lineNumber int) []LineChange {
+	var history []LineChange
+	currentLine := lineNumber
+
+	// Walk backwards through snapshots to trace the line history.
+	for j := len(i.history.items) - 1; j >= 0; j-- {
+		snapshot := i.history.items[j]
+		if snapshot.changes == nil {
+			continue
+		}
+
+		change, exists := (*snapshot.changes)[currentLine]
+		if !exists {
+			// Line was not part of any change, it maps 1:1.
+			history = append(history, LineChange{
+				_type:  "unchanged",
+				origin: currentLine,
+			})
+			continue
+		}
+
+		history = append(history, change)
+
+		if change._type == "contracting" {
+			currentLine = change.origin
+		} else if change._type == "expanding" {
+			currentLine = change.origin
+		}
+	}
+
+	return history
+}
+
+func (i *Instance) PrintHistory() {
+	for idx, snapshot := range i.history.items {
+		println("Snapshot", idx, "Type:", snapshot._type, "Hash:", snapshot.hash)
+		println("Source:", snapshot.source)
+		println("Lines:")
+		for lineNum, line := range snapshot.lines {
+			println(lineNum, ":", line)
+		}
+
+		println()
+	}
 }
