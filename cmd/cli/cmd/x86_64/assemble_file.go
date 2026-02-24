@@ -122,11 +122,9 @@ var AssembleFileCmd = &cobra.Command{
 			return
 		}
 
-		lm := lineMap.New(source, lineMapSource)
-
-		err = lm.InitialIndex()
+		lm, err := lineMap.New(source, lineMapSource)
 		if err != nil {
-			cmd.PrintErrln("Error: Failed to create initial line map index:", err)
+			cmd.PrintErrln("Error: Failed to initialize line map:", err)
 			return
 		}
 

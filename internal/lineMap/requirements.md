@@ -37,24 +37,39 @@ or partially-initialised state.
 
 ### FR-2: Instance Lifecycle
 
-- **FR-2.1** A new `Instance` is created via `New(value, source)` where `value` is the initial
-  source string and `source` is a `Source` obtained from `LoadSource()`.
-- **FR-2.2** Because `Source` is guaranteed valid after construction (see FR-1), `New()` does
-  not need to perform any source validation and cannot fail due to source loading errors.
-- **FR-2.3** A freshly created `Instance` must be in the `InstanceStateInitial` state with an
-  empty history.
+An `Instance` represents an initialised, indexed line map. If an `Instance` value
+exists, it is guaranteed to hold a valid source, an initial snapshot, and be ready
+for `Update()` calls. There is no uninitialised or partially-constructed state.
+
+- **FR-2.1** An `Instance` is created exclusively through `New(value, source)`, which
+  takes the initial source string and a `Source` obtained from `LoadSource()`. It
+  performs the initial indexing (first snapshot) and returns a ready-to-use `*Instance`
+  — or an error.
+- **FR-2.2** Because `Source` is guaranteed valid after construction (see FR-1), `New()`
+  does not need to perform source validation.
+- **FR-2.3** `New()` must create the initial snapshot (type `LineSnapshotTypeInitial`)
+  as part of construction. There is no separate `InitialIndex()` step.
+- **FR-2.4** After `New()` returns successfully, `Update()` can be called immediately
+  without any precondition checks. Callers can trust that any `*Instance` they receive
+  is fully initialised.
+- **FR-2.5** There is no `state` field. The existence of the `Instance` itself is the
+  proof that it is valid and indexed.
 
 ### FR-3: Initial Indexing
 
-- **FR-3.1** `InitialIndex()` must create the first snapshot in the history, splitting
-  `Instance.value` into lines.
-- **FR-3.2** `InitialIndex()` must only execute once. Subsequent calls must return an error
-  indicating the initial snapshot already exists.
-- **FR-3.3** The initial snapshot must have type `LineSnapshotTypeInitial`.
+Initial indexing is performed internally by `New()` and is not exposed as a public
+method.
+
+- **FR-3.1** The initial snapshot must split `Instance.value` into lines and store them
+  in the history.
+- **FR-3.2** The initial snapshot must have type `LineSnapshotTypeInitial`.
+- **FR-3.3** Exactly one initial snapshot must exist in the history. This is guaranteed
+  by construction — `New()` creates it, and no other code path can create a second one.
 
 ### FR-4: Updating (Snapshotting)
 
-- **FR-4.1** `Update(newValue)` must fail with an error if `InitialIndex()` has not been called.
+- **FR-4.1** `Update(newValue)` can be called on any `*Instance` without precondition checks,
+  because the initial snapshot is guaranteed to exist (see FR-2).
 - **FR-4.2** If the new value is identical to the latest snapshot (compared by hash), a
   `LineSnapshotTypeNoChange` snapshot must be created with `nil` changes.
 - **FR-4.3** If the new value differs from the latest snapshot, a `LineSnapshotTypeChange`
@@ -142,8 +157,8 @@ or partially-initialised state.
 
 - **NFR-4.1** The `lineMap` package must integrate with the assembler's pre-processing pipeline
   as follows:
-  1. Create an `Instance` with the raw source and file path.
-  2. Call `InitialIndex()` to establish the baseline.
+  1. Load the source file via `LoadSource(path)`.
+  2. Create an `Instance` via `New(value, source)` — this establishes the baseline snapshot.
   3. After each pre-processing step (includes → macros → conditionals), call `Update()` with
      the transformed source.
   4. Use `LineOrigin()` / `LineHistory()` during error reporting or debugging to map processed
@@ -165,7 +180,7 @@ or partially-initialised state.
 
 | Constant                   | Meaning                                     |
 |----------------------------|---------------------------------------------|
-| `LineSnapshotTypeInitial`  | First snapshot, created by `InitialIndex()`. |
+| `LineSnapshotTypeInitial`  | First snapshot, created by `New()`.         |
 | `LineSnapshotTypeChange`   | Source changed; diff is attached.            |
 | `LineSnapshotTypeNoChange` | Source identical to previous snapshot.       |
 

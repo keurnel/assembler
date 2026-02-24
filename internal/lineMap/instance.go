@@ -5,16 +5,10 @@ import (
 	"strings"
 )
 
-const (
-	InstanceStateInitial int8 = iota
-	InstanceStateIndexed
-)
-
-// Instance - represents a singular instance of a line map.
+// Instance - represents a singular instance of a line map. If an Instance
+// exists, it is guaranteed to hold a valid source, an initial snapshot, and
+// be ready for Update() calls.
 type Instance struct {
-	// Instance related data.
-	//
-	state int8
 	value string
 
 	// Child structs.
@@ -23,47 +17,28 @@ type Instance struct {
 	history History
 }
 
-// New - creates a new instance of a line map. The provided Source must have
-// been obtained from LoadSource() and is guaranteed to be valid.
-func New(value string, source Source) *Instance {
-	return &Instance{
-		state:   InstanceStateInitial,
+// New - creates a new instance of a line map. It performs the initial
+// indexing (first snapshot) and returns a ready-to-use *Instance.
+// The provided Source must have been obtained from LoadSource().
+func New(value string, source Source) (*Instance, error) {
+	instance := &Instance{
 		value:   value,
 		source:  source,
 		history: History{},
 	}
-}
 
-// InitialIndex - perform initial indexing of the lines in the `Instance.value` and
-// stores the line map in the `Instance.history`. This method only executes once when
-// the `Instance.history` is empty.
-func (i *Instance) InitialIndex() error {
-	// Does the history already have an initial snapshot? If so,
-	// we return an error.
-	//
-	if i.history.hasInitialSnapshot {
-		return errors.New("line map: initial snapshot already exists in history")
-	}
-
-	// Trigger snapshot of the initial `Instance` state.
-	//
-	err := i.history.snapshot(i, LineSnapshotTypeInitial, nil)
+	// Perform initial indexing as part of construction so that the
+	// returned Instance is always fully initialised.
+	err := instance.history.snapshot(instance, LineSnapshotTypeInitial, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return instance, nil
 }
 
 // Update - updates the value of `Instance.value` and creates a snapshot of the new state in `Instance.history`.
 func (i *Instance) Update(newValue string) error {
-
-	// Before we can make an update, we need to ensure that the `Instance.history` has an
-	// initial snapshot. If not, we return an error.
-	//
-	if !i.history.hasInitialSnapshot {
-		return errors.New("line map: initial snapshot does not exist in history")
-	}
 
 	// Get latest snapshot from the instance history.
 	//
