@@ -265,6 +265,57 @@ that depend on snapshot state do not need nil guards.
 - **FR-10.4** `LatestSnapshot()` must return a pointer to the most recent snapshot. There
   is no nil return — the latest snapshot is guaranteed to exist (FR-2).
 
+### FR-11: Facade
+
+The facade provides a simplified, high-level API for the most common lineMap
+workflow: load a source file, track it through pre-processing transformations,
+and trace lines back to their origin. It composes `LoadSource`, `New`, `Update`,
+`LineOrigin`, and `LineHistory` into a minimal surface that eliminates boilerplate
+for callers.
+
+#### FR-11.1: Construction
+
+- **FR-11.1.1** `Track(path)` is the single entry point. It calls `LoadSource(path)` to
+  validate and read the file, then calls `New(content, source)` to create the `Instance`
+  with its initial snapshot. It returns a `*Tracker` — or an error if `LoadSource` fails.
+- **FR-11.1.2** `Track` is the only way to create a `Tracker`. If a `Tracker` exists, it
+  is guaranteed to hold a valid, fully initialised `Instance`.
+- **FR-11.1.3** The file content used for the initial snapshot is the content already
+  read by `LoadSource` — the caller does not need to read the file separately.
+
+#### FR-11.2: Snapshotting
+
+- **FR-11.2.1** `Snapshot(source)` records a new version of the source after a
+  pre-processing step. It delegates to `Instance.Update(source)`.
+- **FR-11.2.2** `Snapshot` is infallible — it delegates to `Update` which is infallible
+  (FR-4.1).
+
+#### FR-11.3: Tracing
+
+- **FR-11.3.1** `Origin(lineNumber)` traces a line in the latest processed source back
+  to its original line number. It delegates to `Instance.LineOrigin(lineNumber)`.
+  Returns `-1` if the line was inserted during pre-processing.
+- **FR-11.3.2** `History(lineNumber)` returns the chronological evolution of a line
+  across all snapshots. It delegates to `Instance.LineHistory(lineNumber)`.
+
+#### FR-11.4: Read Access
+
+- **FR-11.4.1** `Source()` returns the current processed source string. It delegates to
+  `Instance.Value()`.
+- **FR-11.4.2** `Lines()` returns the lines of the current processed source. It delegates
+  to `Instance.Lines()`.
+- **FR-11.4.3** `FilePath()` returns the original file path that was passed to `Track()`.
+  It delegates to `Source.Path()`.
+
+#### FR-11.5: Design Constraints
+
+- **FR-11.5.1** The `Tracker` struct is defined in a separate file (`tracker.go`) to keep
+  the facade isolated from the core implementation.
+- **FR-11.5.2** The `Tracker` does not duplicate logic — every method delegates to the
+  underlying `Instance` or `Source`. It is a pure composition layer.
+- **FR-11.5.3** The `Tracker` does not expose the underlying `Instance` or `Source`
+  directly. Callers interact only through the facade methods.
+
 ---
 
 ## Non-Functional Requirements
