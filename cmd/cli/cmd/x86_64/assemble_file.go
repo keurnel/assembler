@@ -25,6 +25,10 @@ var AssembleFileCmd = &cobra.Command{
 	},
 }
 
+func init() {
+	AssembleFileCmd.Flags().BoolP("verbose", "v", false, "Show debug context logs (trace, info, warning) during assembly")
+}
+
 // runAssembleFile orchestrates the full assembly pipeline: resolve the file,
 // load architecture instructions, run pre-processing, and assemble.
 func runAssembleFile(cmd *cobra.Command, args []string) error {
@@ -32,6 +36,8 @@ func runAssembleFile(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+
+	verbose, _ := cmd.Flags().GetBool("verbose")
 
 	loadArchitectureInstructions()
 
@@ -50,10 +56,20 @@ func runAssembleFile(cmd *cobra.Command, args []string) error {
 
 	source = preProcess(source, tracker, debugCtx)
 
+	// Print debug context entries when verbose mode is enabled.
+	if verbose {
+		for _, e := range debugCtx.Entries() {
+			cmd.PrintErrln(e.String())
+		}
+	}
+
 	// Abort if pre-processing recorded any errors (FR-9.5).
 	if debugCtx.HasErrors() {
-		for _, e := range debugCtx.Errors() {
-			cmd.PrintErrln(e.String())
+		if !verbose {
+			// Errors were not yet printed; print them now.
+			for _, e := range debugCtx.Errors() {
+				cmd.PrintErrln(e.String())
+			}
 		}
 		return fmt.Errorf("assembly aborted: %d error(s) during pre-processing", len(debugCtx.Errors()))
 	}
