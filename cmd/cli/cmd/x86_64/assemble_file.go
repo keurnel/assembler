@@ -122,11 +122,7 @@ var AssembleFileCmd = &cobra.Command{
 			return
 		}
 
-		lm, err := lineMap.New(source, lineMapSource)
-		if err != nil {
-			cmd.PrintErrln("Error: Failed to initialize line map:", err)
-			return
-		}
+		lm := lineMap.New(source, lineMapSource)
 
 		// Step 1: Handle inclusion of other `.kasm` files in the source code.
 		//

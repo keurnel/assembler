@@ -93,8 +93,7 @@ type LinesSnapshot struct {
 }
 
 type History struct {
-	hasInitialSnapshot bool
-	items              []LinesSnapshot
+	items []LinesSnapshot
 }
 
 // empty - returns true if the history is empty, false otherwise.
@@ -155,17 +154,26 @@ func (h *History) LineOrigin(lineNumber int) int {
 	return current
 }
 
-// snapshot - creates a snapshot of the current state of `Instance`
-// and appends it to the history. When the snapshot type is `LineSnapshotTypeChange`,
-// the `changes` parameter should contain the computed diff; for other types it may be nil.
-func (h *History) snapshot(instance *Instance, _type string, changes *map[int]LineChange) error {
+// snapshotInitial - creates the initial snapshot of the Instance and appends
+// it to the history. This method is only called from New() and always creates
+// a snapshot of type LineSnapshotTypeInitial. Because it is the only method
+// that produces an initial snapshot, a second one cannot be created.
+func (h *History) snapshotInitial(instance *Instance) {
+	h.items = append(h.items, LinesSnapshot{
+		_type:   LineSnapshotTypeInitial,
+		hash:    h.snapshotHashGenerate(instance.value),
+		source:  instance.value,
+		lines:   strings.Split(instance.value, "\n"),
+		changes: nil,
+	})
+}
 
-	// Cannot have more than one initial snapshot in the history.
-	//
-	if _type == LineSnapshotTypeInitial && h.hasInitialSnapshot {
-		return errors.New("initial snapshot already exists in history")
-	}
-
+// snapshotUpdate - creates a subsequent snapshot (change or no-change) and
+// appends it to the history. This method is only called from Update(). It
+// accepts only LineSnapshotTypeChange or LineSnapshotTypeNoChange — it does
+// not accept LineSnapshotTypeInitial, so a second initial snapshot is
+// structurally impossible.
+func (h *History) snapshotUpdate(instance *Instance, _type string, changes *map[int]LineChange) {
 	h.items = append(h.items, LinesSnapshot{
 		_type:   _type,
 		hash:    h.snapshotHashGenerate(instance.value),
@@ -173,12 +181,6 @@ func (h *History) snapshot(instance *Instance, _type string, changes *map[int]Li
 		lines:   strings.Split(instance.value, "\n"),
 		changes: changes,
 	})
-
-	if _type == LineSnapshotTypeInitial {
-		h.hasInitialSnapshot = true
-	}
-
-	return nil
 }
 
 // snapshotHashGenerate - generates a hash for the source of a snapshot. This is used

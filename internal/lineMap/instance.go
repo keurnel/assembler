@@ -20,7 +20,7 @@ type Instance struct {
 // New - creates a new instance of a line map. It performs the initial
 // indexing (first snapshot) and returns a ready-to-use *Instance.
 // The provided Source must have been obtained from LoadSource().
-func New(value string, source Source) (*Instance, error) {
+func New(value string, source Source) *Instance {
 	instance := &Instance{
 		value:   value,
 		source:  source,
@@ -29,12 +29,9 @@ func New(value string, source Source) (*Instance, error) {
 
 	// Perform initial indexing as part of construction so that the
 	// returned Instance is always fully initialised.
-	err := instance.history.snapshot(instance, LineSnapshotTypeInitial, nil)
-	if err != nil {
-		return nil, err
-	}
+	instance.history.snapshotInitial(instance)
 
-	return instance, nil
+	return instance
 }
 
 // Update - updates the value of `Instance.value` and creates a snapshot of the new state in `Instance.history`.
@@ -48,11 +45,7 @@ func (i *Instance) Update(newValue string) error {
 	// a snapshot in the history that indicates that there are no changes at this point in time.
 	//
 	if latestSnapshot.SourceCompare(newValue) {
-		err := i.history.snapshot(i, LineSnapshotTypeNoChange, nil)
-		if err != nil {
-			return err
-		}
-
+		i.history.snapshotUpdate(i, LineSnapshotTypeNoChange, nil)
 		return nil
 	}
 
@@ -65,10 +58,7 @@ func (i *Instance) Update(newValue string) error {
 
 	i.value = strings.Clone(newValue)
 
-	err = i.history.snapshot(i, LineSnapshotTypeChange, &changes)
-	if err != nil {
-		return err
-	}
+	i.history.snapshotUpdate(i, LineSnapshotTypeChange, &changes)
 
 	return nil
 }

@@ -8,11 +8,7 @@ import (
 // It uses a zero-value Source since tests don't need file I/O.
 func newTestInstance(t *testing.T, value string) *Instance {
 	t.Helper()
-	instance, err := New(value, Source{path: "test.kasm"})
-	if err != nil {
-		t.Fatalf("New() failed: %s", err.Error())
-	}
-	return instance
+	return New(value, Source{path: "test.kasm"})
 }
 
 func TestNew(t *testing.T) {
@@ -25,10 +21,7 @@ func TestNew(t *testing.T) {
 	t.Run("creates Instance with initial snapshot", func(t *testing.T) {
 		source := Source{path: "fakePath.kasm", content: "fake file content"}
 
-		instance, err := New("line1\nline2\nline3", source)
-		if err != nil {
-			t.Fatalf("Expected New() to succeed, got '%s'", err.Error())
-		}
+		instance := New("line1\nline2\nline3", source)
 
 		if instance == nil {
 			t.Fatal("Expected a new instance of `Instance`, got nil")
@@ -53,10 +46,7 @@ func TestNew(t *testing.T) {
 	//
 	// ==============================================================
 	t.Run("initial snapshot exists in history", func(t *testing.T) {
-		instance, err := New("line1\nline2\nline3", Source{path: "test.kasm"})
-		if err != nil {
-			t.Fatalf("New() failed: %s", err.Error())
-		}
+		instance := New("line1\nline2\nline3", Source{path: "test.kasm"})
 
 		if len(instance.history.items) != 1 {
 			t.Fatalf("Expected history to have 1 item after New(), got %d", len(instance.history.items))

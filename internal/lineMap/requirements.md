@@ -43,8 +43,9 @@ for `Update()` calls. There is no uninitialised or partially-constructed state.
 
 - **FR-2.1** An `Instance` is created exclusively through `New(value, source)`, which
   takes the initial source string and a `Source` obtained from `LoadSource()`. It
-  performs the initial indexing (first snapshot) and returns a ready-to-use `*Instance`
-  — or an error.
+  performs the initial indexing (first snapshot) and returns a ready-to-use `*Instance`.
+  `New()` is infallible — it cannot fail because `Source` is guaranteed valid (FR-1) and
+  initial snapshot creation is unconditional.
 - **FR-2.2** Because `Source` is guaranteed valid after construction (see FR-1), `New()`
   does not need to perform source validation.
 - **FR-2.3** `New()` must create the initial snapshot (type `LineSnapshotTypeInitial`)
@@ -57,14 +58,21 @@ for `Update()` calls. There is no uninitialised or partially-constructed state.
 
 ### FR-3: Initial Indexing
 
-Initial indexing is performed internally by `New()` and is not exposed as a public
-method.
+Initial indexing is an internal implementation detail of `New()`. It is not exposed
+as a public method, and it is structurally impossible to create a second initial
+snapshot.
 
 - **FR-3.1** The initial snapshot must split `Instance.value` into lines and store them
   in the history.
 - **FR-3.2** The initial snapshot must have type `LineSnapshotTypeInitial`.
-- **FR-3.3** Exactly one initial snapshot must exist in the history. This is guaranteed
-  by construction — `New()` creates it, and no other code path can create a second one.
+- **FR-3.3** `History` exposes two separate internal snapshot methods:
+  - `snapshotInitial(instance)` — creates the initial snapshot. Called only from `New()`.
+  - `snapshotUpdate(instance, type, changes)` — creates subsequent snapshots. Called only
+    from `Update()`. Accepts only `LineSnapshotTypeChange` or `LineSnapshotTypeNoChange`.
+- **FR-3.4** Because `snapshotInitial` is only called from `New()`, and `snapshotUpdate`
+  does not accept `LineSnapshotTypeInitial`, a second initial snapshot cannot be created.
+  There is no `hasInitialSnapshot` flag and no runtime guard — the invariant is enforced
+  by the API surface, not by conditional checks.
 
 ### FR-4: Updating (Snapshotting)
 
@@ -117,8 +125,8 @@ method.
 ### FR-9: History Management
 
 - **FR-9.1** The `History` must store an ordered list of `LinesSnapshot` entries.
-- **FR-9.2** Only one `LineSnapshotTypeInitial` snapshot may exist; attempting to add a
-  second must return an error.
+- **FR-9.2** Only one `LineSnapshotTypeInitial` snapshot may exist. This is enforced
+  structurally by the API (see FR-3.3 / FR-3.4), not by runtime checks.
 - **FR-9.3** `latest()` must return the most recent snapshot, or `nil` if the history is empty.
 - **FR-9.4** `empty()` / `notEmpty()` must accurately report whether the history contains
   any snapshots.
