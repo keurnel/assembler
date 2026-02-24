@@ -17,7 +17,7 @@ type Source struct {
 	content string
 }
 
-func (s Source) Load() error {
+func (s *Source) Load() error {
 	// Check if file exists before loading.
 	//
 	file, err := osStat(s.path)

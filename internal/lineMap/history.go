@@ -94,23 +94,62 @@ func (h *History) notEmpty() bool {
 	return !h.empty()
 }
 
+// latest - returns the latest snapshot in the history. Returns nil if the history is empty.
+func (h *History) latest() *LinesSnapshot {
+	if h.empty() {
+		return nil
+	}
+	return &h.items[len(h.items)-1]
+}
+
+// LineOrigin - traces a line number in the current (latest) snapshot back through
+// all change snapshots to find the original line number in the initial snapshot.
+// Returns -1 if the line cannot be traced (e.g. it was inserted by a preprocessor step).
+func (h *History) LineOrigin(lineNumber int) int {
+	if h.empty() {
+		return -1
+	}
+
+	current := lineNumber
+
+	// Walk backwards through snapshots (skip the initial one at index 0).
+	for i := len(h.items) - 1; i > 0; i-- {
+		snapshot := h.items[i]
+		if snapshot.changes == nil {
+			continue
+		}
+
+		change, exists := (*snapshot.changes)[current]
+		if !exists {
+			// Line was not part of any change, it maps 1:1.
+			continue
+		}
+
+		switch change._type {
+		case LineSnapshotTypeExpanding:
+			// This line was inserted by the preprocessor; it has no origin.
+			return -1
+		case LineSnapshotTypeContracting:
+			// This line was removed; it has no origin.
+			return -1
+		default:
+			// unchanged — trace through to the original position
+			current = change.origin
+		}
+	}
+
+	return current
+}
+
 // snapshot - creates a snapshot of the current state of `Instance`
-// and appends it to the history.
-func (h *History) snapshot(instance *Instance, _type string) error {
+// and appends it to the history. When the snapshot type is `LineSnapshotTypeChange`,
+// the `changes` parameter should contain the computed diff; for other types it may be nil.
+func (h *History) snapshot(instance *Instance, _type string, changes *map[int]LineChange) error {
 
 	// Cannot have more than one initial snapshot in the history.
 	//
 	if _type == LineSnapshotTypeInitial && h.hasInitialSnapshot {
 		return errors.New("initial snapshot already exists in history")
-	}
-
-	// Construct changes value
-	//
-	var changes *map[int]LineChange
-	if _type == LineSnapshotTypeChange {
-		changes = &map[int]LineChange{}
-	} else {
-		changes = nil
 	}
 
 	h.items = append(h.items, LinesSnapshot{

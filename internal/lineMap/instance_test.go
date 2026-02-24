@@ -232,7 +232,7 @@ func TestInstance_Update(t *testing.T) {
 			history: History{items: []LinesSnapshot{}},
 		}
 
-		instance.InitialIndex()
+		_ = instance.InitialIndex()
 
 		err := instance.Update("line1\nline2\nline3\nline4")
 		if err != nil {
@@ -256,6 +256,192 @@ func TestInstance_Update(t *testing.T) {
 
 		if len(snapshot.lines) != 4 {
 			t.Errorf("Expected snapshot lines to have 4 lines, got %d", len(snapshot.lines))
+		}
+	})
+	// ==============================================================
+	//
+	// Expanding a line stores changes in snapshot
+	//
+	// ==============================================================
+	t.Run("Expanding a line stores changes in snapshot", func(t *testing.T) {
+		instance := &Instance{
+			value:   "line1\nline2\nline3",
+			history: History{items: []LinesSnapshot{}},
+		}
+
+		_ = instance.InitialIndex()
+
+		err := instance.Update("line1\nline2\nline3\nline4")
+		if err != nil {
+			t.Fatalf("Expected Update to succeed, got '%s'", err.Error())
+		}
+
+		snapshot := instance.history.items[1]
+		if snapshot.changes == nil {
+			t.Fatal("Expected changes to be non-nil on a change snapshot")
+		}
+
+		// line4 at index 3 should be an expanding change
+		change, exists := (*snapshot.changes)[3]
+		if !exists {
+			t.Fatal("Expected an expanding change at new line index 3")
+		}
+		if change._type != "expanding" {
+			t.Errorf("Expected change type 'expanding', got '%s'", change._type)
+		}
+	})
+	// ==============================================================
+	//
+	// Contracting lines (removing lines)
+	//
+	// ==============================================================
+	t.Run("Contracting lines", func(t *testing.T) {
+		instance := &Instance{
+			value:   "line1\nline2\nline3\nline4",
+			history: History{items: []LinesSnapshot{}},
+		}
+
+		_ = instance.InitialIndex()
+
+		err := instance.Update("line1\nline4")
+		if err != nil {
+			t.Fatalf("Expected Update to succeed, got '%s'", err.Error())
+		}
+
+		if len(instance.history.items) != 2 {
+			t.Fatalf("Expected 2 history items, got %d", len(instance.history.items))
+		}
+
+		snapshot := instance.history.items[1]
+		if snapshot.changes == nil {
+			t.Fatal("Expected changes to be non-nil")
+		}
+
+		if len(snapshot.lines) != 2 {
+			t.Errorf("Expected 2 lines after contraction, got %d", len(snapshot.lines))
+		}
+	})
+	// ==============================================================
+	//
+	// No change update creates NoChange snapshot
+	//
+	// ==============================================================
+	t.Run("No change update creates NoChange snapshot", func(t *testing.T) {
+		instance := &Instance{
+			value:   "line1\nline2",
+			history: History{items: []LinesSnapshot{}},
+		}
+
+		_ = instance.InitialIndex()
+
+		err := instance.Update("line1\nline2")
+		if err != nil {
+			t.Fatalf("Expected Update to succeed, got '%s'", err.Error())
+		}
+
+		if len(instance.history.items) != 2 {
+			t.Fatalf("Expected 2 history items, got %d", len(instance.history.items))
+		}
+
+		snapshot := instance.history.items[1]
+		if snapshot._type != LineSnapshotTypeNoChange {
+			t.Errorf("Expected snapshot type '%s', got '%s'", LineSnapshotTypeNoChange, snapshot._type)
+		}
+
+		if snapshot.changes != nil {
+			t.Error("Expected changes to be nil on no-change snapshot")
+		}
+	})
+	// ==============================================================
+	//
+	// Multi-step preprocessing: simulating include expansion then macro expansion
+	//
+	// ==============================================================
+	t.Run("Multi-step preprocessing history", func(t *testing.T) {
+		// Step 0: Original source
+		instance := &Instance{
+			value:   "include_marker\nmov rax, 1",
+			history: History{items: []LinesSnapshot{}},
+		}
+
+		_ = instance.InitialIndex()
+
+		// Step 1: Include expands "include_marker" into 3 lines
+		err := instance.Update("; FILE: header.kasm\nmov rbx, 0\nxor rcx, rcx\n; END FILE: header.kasm\nmov rax, 1")
+		if err != nil {
+			t.Fatalf("Step 1 failed: %s", err.Error())
+		}
+
+		// Step 2: Macro expansion replaces "mov rax, 1" with two lines
+		err = instance.Update("; FILE: header.kasm\nmov rbx, 0\nxor rcx, rcx\n; END FILE: header.kasm\npush 1\npop rax")
+		if err != nil {
+			t.Fatalf("Step 2 failed: %s", err.Error())
+		}
+
+		if instance.SnapshotCount() != 3 {
+			t.Errorf("Expected 3 snapshots (initial + 2 updates), got %d", instance.SnapshotCount())
+		}
+
+		// The final value should have 6 lines
+		lines := instance.Lines()
+		if len(lines) != 6 {
+			t.Errorf("Expected 6 lines in final state, got %d", len(lines))
+		}
+	})
+	// ==============================================================
+	//
+	// LineOrigin traces line back through history
+	//
+	// ==============================================================
+	t.Run("LineOrigin traces unchanged line", func(t *testing.T) {
+		instance := &Instance{
+			value:   "line1\nline2\nline3",
+			history: History{items: []LinesSnapshot{}},
+		}
+
+		_ = instance.InitialIndex()
+
+		// Add a line at the beginning, shifting everything down
+		err := instance.Update("new_line\nline1\nline2\nline3")
+		if err != nil {
+			t.Fatalf("Update failed: %s", err.Error())
+		}
+
+		// "line1" was at index 0, now at index 1
+		origin := instance.LineOrigin(1)
+		if origin != 0 {
+			t.Errorf("Expected line 1 to originate from line 0, got %d", origin)
+		}
+
+		// "line3" was at index 2, now at index 3
+		origin = instance.LineOrigin(3)
+		if origin != 2 {
+			t.Errorf("Expected line 3 to originate from line 2, got %d", origin)
+		}
+	})
+	// ==============================================================
+	//
+	// LineOrigin returns -1 for inserted lines
+	//
+	// ==============================================================
+	t.Run("LineOrigin returns -1 for inserted lines", func(t *testing.T) {
+		instance := &Instance{
+			value:   "line1\nline2",
+			history: History{items: []LinesSnapshot{}},
+		}
+
+		_ = instance.InitialIndex()
+
+		// Insert a new line in the middle
+		err := instance.Update("line1\nnew_inserted_line\nline2")
+		if err != nil {
+			t.Fatalf("Update failed: %s", err.Error())
+		}
+
+		// The inserted line should return -1 (no origin in the initial source)
+		origin := instance.LineOrigin(1)
+		if origin != -1 {
+			t.Errorf("Expected inserted line to have origin -1, got %d", origin)
 		}
 	})
 }
