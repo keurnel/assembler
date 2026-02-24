@@ -116,12 +116,13 @@ var AssembleFileCmd = &cobra.Command{
 		// pre-processing. This allows us to trace any line in the final
 		// processed source back to its original location in the source file.
 		//
-		lineMapSource := lineMap.NewSource(fullPath)
-		lm, err := lineMap.New(source, lineMapSource)
+		lineMapSource, err := lineMap.LoadSource(fullPath)
 		if err != nil {
-			cmd.PrintErrln("Error: Failed to initialize line map:", err)
+			cmd.PrintErrln("Error: Failed to load source file:", err)
 			return
 		}
+
+		lm := lineMap.New(source, lineMapSource)
 
 		err = lm.InitialIndex()
 		if err != nil {

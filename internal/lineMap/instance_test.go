@@ -17,83 +17,38 @@ func (f *fakeFileInfo) IsDir() bool {
 func TestNew(t *testing.T) {
 	// ==============================================================
 	//
-	// Returns error when `source.Load()` returns an error.
+	// Creates a new Instance with the given value and a valid Source.
+	// New() is infallible — Source is guaranteed valid at construction.
 	//
 	// ==============================================================
-	t.Run("source.Load() returns an error", func(t *testing.T) {
-		osStat = func(name string) (os.FileInfo, error) {
-			return nil, os.ErrNotExist
-		}
+	t.Run("creates Instance with given value and source", func(t *testing.T) {
+		source := Source{path: "fakePath.kasm", content: "fake file content"}
 
-		_, err := New("value", Source{path: "fakePath"})
-		if err == nil {
-			t.Error("Expected error when `source.Load()` returns an error, got nil")
-		}
-
-		if err.Error() != "file does not exist" {
-			t.Errorf("Expected error message 'file does not exist', got '%s'", err.Error())
-		}
-
-		osStat = os.Stat // Reset osStat to its original implementation for other tests.
-	})
-
-	// ==============================================================
-	//
-	// Returns error when `source.Load()` returns an error because the path is a directory.
-	//
-	// ==============================================================
-	t.Run("source.Load() returns an error because the path is a directory", func(t *testing.T) {
-		osStat = func(name string) (os.FileInfo, error) {
-			return &fakeFileInfo{isDir: true}, nil
-		}
-
-		_, err := New("value", Source{path: "fakePath"})
-		if err == nil {
-			t.Error("Expected error when `source.Load()` returns an error because the path is a directory, got nil")
-		}
-
-		if err.Error() != "lineMap error: source path is a directory were a file is expected" {
-			t.Errorf("Expected error message 'lineMap error: source path is a directory were a file is expected', got '%s'", err.Error())
-		}
-
-		osStat = os.Stat // Reset osStat to its original implementation for other tests.
-	})
-
-	// ==============================================================
-	//
-	// Returns a new instance of `Instance` when `source.Load()` does not return an error.
-	//
-	// ==============================================================
-	t.Run("source.Load() does not return an error", func(t *testing.T) {
-		osStat = func(name string) (os.FileInfo, error) {
-			if name != "fakePath" {
-				t.Errorf("Expected `osStat` to be called with 'fakePath', got '%s'", name)
-				return nil, os.ErrNotExist
-			}
-			return &fakeFileInfo{isDir: false}, nil
-		}
-
-		osReadFile = func(name string) ([]byte, error) {
-			return []byte("fake file content"), nil
-		}
-
-		instance, err := New("value", Source{path: "fakePath"})
-		if err != nil {
-			t.Errorf("Expected no error when `source.Load()` does not return an error, got '%s'", err.Error())
-			return
-		}
+		instance := New("value", source)
 
 		if instance == nil {
-			t.Error("Expected a new instance of `Instance`, got nil")
-			return
+			t.Fatal("Expected a new instance of `Instance`, got nil")
 		}
 
 		if instance.value != "value" {
 			t.Errorf("Expected instance value to be 'value', got '%s'", instance.value)
 		}
 
-		osStat = os.Stat
-		osReadFile = os.ReadFile
+		if instance.state != InstanceStateInitial {
+			t.Errorf("Expected instance state to be InstanceStateInitial, got %d", instance.state)
+		}
+
+		if instance.source.Path() != "fakePath.kasm" {
+			t.Errorf("Expected source path 'fakePath.kasm', got '%s'", instance.source.Path())
+		}
+
+		if instance.source.Content() != "fake file content" {
+			t.Errorf("Expected source content 'fake file content', got '%s'", instance.source.Content())
+		}
+
+		if len(instance.history.items) != 0 {
+			t.Errorf("Expected empty history, got %d items", len(instance.history.items))
+		}
 	})
 }
 

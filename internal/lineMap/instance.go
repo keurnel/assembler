@@ -23,22 +23,15 @@ type Instance struct {
 	history History
 }
 
-// New - creates a new instance of a line map.
-func New(value string, source Source) (*Instance, error) {
-
-	err := source.Load()
-	if err != nil {
-		return nil, err
-	}
-
-	instance := Instance{
+// New - creates a new instance of a line map. The provided Source must have
+// been obtained from LoadSource() and is guaranteed to be valid.
+func New(value string, source Source) *Instance {
+	return &Instance{
 		state:   InstanceStateInitial,
 		value:   value,
 		source:  source,
 		history: History{},
 	}
-
-	return &instance, nil
 }
 
 // InitialIndex - perform initial indexing of the lines in the `Instance.value` and
