@@ -234,14 +234,18 @@ func (i *Instance) LatestSnapshot() *LinesSnapshot {
 	return i.history.latest()
 }
 
-// LineHistory - returns how a line evolved over the snapshots in the history. It returns a slice of
-// LineChange structs that represent the state of the line in each snapshot (e.g. unchanged, expanded, contracted).
+// LineHistory - returns how a line evolved across all change snapshots, in chronological
+// order (oldest change first, most recent last). Each entry carries full detail (type,
+// origin, newIndex, content).
+//
+// The changes map only contains "unchanged" and "expanding" entries (FR-5.6).
+// For expanding entries, tracing stops — the line did not exist before that snapshot.
 func (i *Instance) LineHistory(lineNumber int) []LineChange {
 	var history []LineChange
 	currentLine := lineNumber
 
-	// Walk backwards through snapshots to trace the line history.
-	for j := len(i.history.items) - 1; j >= 0; j-- {
+	// Walk backwards through change snapshots (skip the initial at index 0).
+	for j := len(i.history.items) - 1; j > 0; j-- {
 		snapshot := i.history.items[j]
 		if snapshot.changes == nil {
 			continue
@@ -251,19 +255,25 @@ func (i *Instance) LineHistory(lineNumber int) []LineChange {
 		if !exists {
 			// Line was not part of any change, it maps 1:1.
 			// Resolve content from the snapshot lines.
-			content := ""
-			if currentLine >= 0 && currentLine < len(snapshot.lines) {
-				content = snapshot.lines[currentLine]
-			}
+			content := snapshot.lines[currentLine]
 			history = append(history, newUnchangedChange(currentLine, currentLine, content))
 			continue
 		}
 
 		history = append(history, change)
 
-		if change.Type() == "contracting" || change.Type() == "expanding" {
-			currentLine = change.Origin()
+		if change.Type() == "expanding" {
+			// This line was inserted at this snapshot — no earlier origin to trace.
+			break
 		}
+
+		// unchanged — continue tracing with the origin index.
+		currentLine = change.Origin()
+	}
+
+	// Reverse to produce chronological order (oldest first).
+	for left, right := 0, len(history)-1; left < right; left, right = left+1, right-1 {
+		history[left], history[right] = history[right], history[left]
 	}
 
 	return history

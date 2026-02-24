@@ -303,3 +303,171 @@ func TestInstance_Update(t *testing.T) {
 		}
 	})
 }
+
+func TestInstance_LineHistory(t *testing.T) {
+	// ==============================================================
+	//
+	// FR-7.1: Returns chronological order (oldest first).
+	// FR-7.3: Unchanged entries trace through with origin.
+	//
+	// ==============================================================
+	t.Run("unchanged line returns chronological history", func(t *testing.T) {
+		instance := newTestInstance(t, "line1\nline2\nline3")
+
+		// Insert a line at the beginning — "line1" shifts from index 0 to index 1.
+		instance.Update("new_line\nline1\nline2\nline3")
+
+		history := instance.LineHistory(1)
+		if len(history) != 1 {
+			t.Fatalf("Expected 1 history entry, got %d", len(history))
+		}
+
+		// The single entry should be unchanged, mapping origin 0 → newIndex 1.
+		entry := history[0]
+		if entry.Type() != "unchanged" {
+			t.Errorf("Expected type 'unchanged', got '%s'", entry.Type())
+		}
+		if entry.Origin() != 0 {
+			t.Errorf("Expected origin 0, got %d", entry.Origin())
+		}
+		if entry.NewIndex() != 1 {
+			t.Errorf("Expected newIndex 1, got %d", entry.NewIndex())
+		}
+		if entry.Content() != "line1" {
+			t.Errorf("Expected content 'line1', got '%s'", entry.Content())
+		}
+	})
+
+	// ==============================================================
+	//
+	// FR-7.4: Expanding entry — tracing stops, line did not exist before.
+	//
+	// ==============================================================
+	t.Run("expanding line stops tracing", func(t *testing.T) {
+		instance := newTestInstance(t, "line1\nline2")
+
+		// Insert a new line in the middle.
+		instance.Update("line1\nnew_line\nline2")
+
+		history := instance.LineHistory(1)
+		if len(history) != 1 {
+			t.Fatalf("Expected 1 history entry for inserted line, got %d", len(history))
+		}
+
+		entry := history[0]
+		if entry.Type() != "expanding" {
+			t.Errorf("Expected type 'expanding', got '%s'", entry.Type())
+		}
+		if entry.Content() != "new_line" {
+			t.Errorf("Expected content 'new_line', got '%s'", entry.Content())
+		}
+		if entry.NewIndex() != 1 {
+			t.Errorf("Expected newIndex 1, got %d", entry.NewIndex())
+		}
+	})
+
+	// ==============================================================
+	//
+	// FR-7.5: Line not in changes map → synthesised unchanged entry.
+	//
+	// ==============================================================
+	t.Run("line not in changes map is synthesised as unchanged", func(t *testing.T) {
+		instance := newTestInstance(t, "line1\nline2\nline3")
+
+		// Append a line — "line1" at index 0 is not part of any change.
+		instance.Update("line1\nline2\nline3\nline4")
+
+		history := instance.LineHistory(0)
+		if len(history) != 1 {
+			t.Fatalf("Expected 1 history entry, got %d", len(history))
+		}
+
+		entry := history[0]
+		if entry.Type() != "unchanged" {
+			t.Errorf("Expected type 'unchanged', got '%s'", entry.Type())
+		}
+		if entry.Content() != "line1" {
+			t.Errorf("Expected content 'line1', got '%s'", entry.Content())
+		}
+	})
+
+	// ==============================================================
+	//
+	// FR-7.1 / FR-7.2: Multi-step history in chronological order.
+	//
+	// ==============================================================
+	t.Run("multi-step history is chronological", func(t *testing.T) {
+		instance := newTestInstance(t, "line1\nline2")
+
+		// Step 1: Insert at the beginning — "line1" shifts 0→1, "line2" shifts 1→2.
+		instance.Update("header\nline1\nline2")
+
+		// Step 2: Append at the end — "line2" at index 2 is unchanged.
+		instance.Update("header\nline1\nline2\nfooter")
+
+		// Trace "line2" which is now at index 2.
+		history := instance.LineHistory(2)
+
+		// Step 2: line2 was not in the changes map (it stayed at index 2) → synthesised unchanged.
+		// Step 1: line2 was unchanged, origin 1 → newIndex 2.
+		// Chronological: oldest first → step1, step2.
+		if len(history) != 2 {
+			t.Fatalf("Expected 2 history entries, got %d", len(history))
+		}
+
+		// Oldest entry (step 1): unchanged, origin 1 → newIndex 2.
+		oldest := history[0]
+		if oldest.Type() != "unchanged" {
+			t.Errorf("Expected oldest type 'unchanged', got '%s'", oldest.Type())
+		}
+		if oldest.Origin() != 1 {
+			t.Errorf("Expected oldest origin 1, got %d", oldest.Origin())
+		}
+
+		// Most recent entry (step 2): synthesised unchanged at index 2.
+		newest := history[1]
+		if newest.Type() != "unchanged" {
+			t.Errorf("Expected newest type 'unchanged', got '%s'", newest.Type())
+		}
+		if newest.Content() != "line2" {
+			t.Errorf("Expected newest content 'line2', got '%s'", newest.Content())
+		}
+	})
+
+	// ==============================================================
+	//
+	// FR-7.7: Each entry carries full detail.
+	//
+	// ==============================================================
+	t.Run("entries carry full detail", func(t *testing.T) {
+		instance := newTestInstance(t, "aaa\nbbb")
+
+		// Replace "bbb" with "ccc" (bbb is contracted, ccc is expanded at index 1).
+		instance.Update("aaa\nccc")
+
+		// Line 1 ("ccc") was expanding — should carry content.
+		history := instance.LineHistory(1)
+		if len(history) != 1 {
+			t.Fatalf("Expected 1 entry, got %d", len(history))
+		}
+
+		entry := history[0]
+		if entry.Type() != "expanding" {
+			t.Errorf("Expected 'expanding', got '%s'", entry.Type())
+		}
+		if entry.Content() != "ccc" {
+			t.Errorf("Expected content 'ccc', got '%s'", entry.Content())
+		}
+		if entry.NewIndex() != 1 {
+			t.Errorf("Expected newIndex 1, got %d", entry.NewIndex())
+		}
+		if entry.Origin() != 0 {
+			t.Errorf("Expected origin 0, got %d", entry.Origin())
+		}
+		// String() should produce readable output.
+		s := entry.String()
+		if s == "" {
+			t.Error("Expected non-empty String() output")
+		}
+	})
+}

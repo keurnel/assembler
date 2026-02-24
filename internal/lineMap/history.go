@@ -120,12 +120,13 @@ func (h *History) latest() *LinesSnapshot {
 
 // LineOrigin - traces a line number in the current (latest) snapshot back through
 // all change snapshots to find the original line number in the initial snapshot.
-// Returns -1 if the line cannot be traced (e.g. it was inserted by a preprocessor step).
+// Returns -1 if the line was inserted during pre-processing (expanding).
+//
+// There is no empty-history guard — LineOrigin is only reachable on a fully
+// constructed Instance (FR-2), which guarantees at least one snapshot.
+// There is no "contracting" case — contracting entries live in the removals
+// slice (FR-5.6), not in the changes map.
 func (h *History) LineOrigin(lineNumber int) int {
-	if h.empty() {
-		return -1
-	}
-
 	current := lineNumber
 
 	// Walk backwards through snapshots (skip the initial one at index 0).
@@ -141,17 +142,13 @@ func (h *History) LineOrigin(lineNumber int) int {
 			continue
 		}
 
-		switch change.Type() {
-		case "expanding":
+		if change.Type() == "expanding" {
 			// This line was inserted by the preprocessor; it has no origin.
 			return -1
-		case "contracting":
-			// This line was removed; it has no origin.
-			return -1
-		default:
-			// unchanged — trace through to the original position
-			current = change.Origin()
 		}
+
+		// unchanged — trace through to the original position.
+		current = change.Origin()
 	}
 
 	return current

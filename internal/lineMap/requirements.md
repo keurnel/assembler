@@ -170,21 +170,53 @@ internal fields directly:
 
 ### FR-6: Line Origin Tracing
 
-- **FR-6.1** `LineOrigin(lineNumber)` must trace a line number in the latest (processed)
-  source back through all change snapshots to the original line number in the initial
-  snapshot.
-- **FR-6.2** For unchanged lines, the origin must be the corresponding line index in the
-  previous snapshot.
-- **FR-6.3** For lines that were inserted during pre-processing (expanding), `LineOrigin()`
-  must return `-1` to indicate the line has no origin in the initial source.
-- **FR-6.4** For lines that were removed (contracting), `LineOrigin()` must return `-1`.
-- **FR-6.5** If the history is empty, `LineOrigin()` must return `-1`.
+`LineOrigin(lineNumber)` traces a line in the latest processed source back to its
+original position in the initial source. Because an `Instance` is guaranteed to have
+an initial snapshot (FR-2), and contracting entries are stored in `removals` rather
+than in the changes map (FR-5.6), the tracing logic only needs to handle two cases
+in the map: `unchanged` and `expanding`.
+
+- **FR-6.1** `LineOrigin(lineNumber)` must walk backwards through the change snapshots
+  (skipping the initial snapshot at index 0) and trace `lineNumber` back to the
+  original line index.
+- **FR-6.2** For `unchanged` entries in the changes map, the origin is the corresponding
+  line index in the previous version. Tracing continues with that origin.
+- **FR-6.3** For `expanding` entries in the changes map, the line was inserted during
+  pre-processing and has no origin. `LineOrigin()` must return `-1`.
+- **FR-6.4** If a line number is not present in a snapshot's changes map, it maps 1:1
+  (unchanged without positional shift). Tracing continues with the same line number.
+- **FR-6.5** There is no `h.empty()` guard. `LineOrigin` is only reachable on a fully
+  constructed `Instance` (FR-2), which guarantees at least one snapshot exists.
+- **FR-6.6** There is no `"contracting"` case in the changes map lookup. Contracting
+  entries live in the `removals` slice (FR-5.6.2) and cannot appear as map values.
+  The changes map only contains `unchanged` and `expanding` entries.
 
 ### FR-7: Line History
 
-- **FR-7.1** `LineHistory(lineNumber)` must return a slice of `LineChange` entries describing
-  how a specific line evolved across all snapshots (e.g. unchanged → expanded → unchanged).
-- **FR-7.2** The history must walk backwards through snapshots, following the origin chain.
+`LineHistory(lineNumber)` returns the evolution of a specific line across all
+snapshots, from oldest to newest. Because contracting entries live in the
+`removals` slice (FR-5.6.2), the changes map only contains `unchanged` and
+`expanding` entries — those are the only two cases to handle.
+
+- **FR-7.1** `LineHistory(lineNumber)` must return a slice of `LineChange` entries
+  describing how a specific line evolved across all change snapshots, in
+  **chronological order** (oldest change first, most recent last).
+- **FR-7.2** The method must walk backwards through snapshots (skipping the initial
+  snapshot at index 0, which has no changes) to build the origin chain, then reverse
+  the result to produce chronological order.
+- **FR-7.3** For `unchanged` entries in the changes map, the line existed in the
+  previous version at `Origin()`. Tracing continues with that origin index.
+- **FR-7.4** For `expanding` entries in the changes map, the line was inserted during
+  pre-processing and did not exist before this snapshot. The expanding entry is
+  recorded and tracing **stops** — there is no earlier origin to follow.
+- **FR-7.5** If a line number is not present in a snapshot's changes map, it maps 1:1
+  (unchanged, no positional shift). An `unchanged` entry is synthesised with content
+  resolved from the snapshot's lines, and tracing continues with the same line number.
+- **FR-7.6** There is no `"contracting"` case in the changes map lookup. Contracting
+  entries live in the `removals` slice (FR-5.6.2) and cannot appear as map values.
+- **FR-7.7** Each `LineChange` in the returned slice carries full detail (type, origin,
+  newIndex, content) as specified by FR-5.4, so consumers can render a complete
+  per-line history without additional lookups.
 
 ### FR-8: Snapshot Hashing
 
