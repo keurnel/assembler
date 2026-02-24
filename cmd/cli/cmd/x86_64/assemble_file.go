@@ -137,11 +137,7 @@ var AssembleFileCmd = &cobra.Command{
 		}
 
 		// Snapshot after includes — lines may have expanded.
-		err = lm.Update(source)
-		if err != nil {
-			cmd.PrintErrln("Error: Line map update failed after include processing:", err)
-			return
-		}
+		lm.Update(source)
 
 		// Step 2: Handle macros in the source code.
 		//
@@ -150,11 +146,7 @@ var AssembleFileCmd = &cobra.Command{
 		source = kasm.PreProcessingReplaceMacroCalls(source, macros)
 
 		// Snapshot after macro expansion — lines may have expanded or contracted.
-		err = lm.Update(source)
-		if err != nil {
-			cmd.PrintErrln("Error: Line map update failed after macro processing:", err)
-			return
-		}
+		lm.Update(source)
 
 		// Step 3: Handle conditional assembly directives in the source code.
 		//
@@ -162,11 +154,7 @@ var AssembleFileCmd = &cobra.Command{
 		source = kasm.PreProcessingHandleConditionals(source, symbolTable)
 
 		// Snapshot after conditional processing — lines may have been removed.
-		err = lm.Update(source)
-		if err != nil {
-			cmd.PrintErrln("Error: Line map update failed after conditional processing:", err)
-			return
-		}
+		lm.Update(source)
 
 		// Print history of line transformations for debugging
 		lineHistory := lm.LineHistory(14)

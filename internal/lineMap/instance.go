@@ -1,7 +1,6 @@
 package lineMap
 
 import (
-	"errors"
 	"strings"
 )
 
@@ -35,7 +34,9 @@ func New(value string, source Source) *Instance {
 }
 
 // Update - updates the value of `Instance.value` and creates a snapshot of the new state in `Instance.history`.
-func (i *Instance) Update(newValue string) error {
+// Update is infallible — the initial snapshot is guaranteed to exist (FR-2), so latest() always returns
+// a valid snapshot and change detection always has data to work with.
+func (i *Instance) Update(newValue string) {
 
 	// Get latest snapshot from the instance history.
 	//
@@ -45,41 +46,37 @@ func (i *Instance) Update(newValue string) error {
 	// a snapshot in the history that indicates that there are no changes at this point in time.
 	//
 	if latestSnapshot.SourceCompare(newValue) {
-		i.history.snapshotUpdate(i, LineSnapshotTypeNoChange, nil)
-		return nil
+		i.history.snapshotNoChange(i)
+		return
 	}
 
 	// Collect changes between the new value and the last snapshot in the history.
 	//
-	changes, err := i.changes(newValue)
-	if err != nil {
-		return err
-	}
+	changes, removals := i.changes(newValue)
 
 	i.value = strings.Clone(newValue)
 
-	i.history.snapshotUpdate(i, LineSnapshotTypeChange, &changes)
-
-	return nil
+	i.history.snapshotChange(i, changes, removals)
 }
 
 // changes - computes line-level changes between the current latest snapshot and a new value.
 // It uses a longest common subsequence (LCS) approach to identify which lines are unchanged,
 // which were expanded (added/replaced), and which were contracted (removed).
-func (i *Instance) changes(newValue string) (map[int]LineChange, error) {
-
-	if i.history.empty() {
-		return nil, errors.New("line map: history is empty, cannot compute changes")
-	}
+//
+// Returns:
+//   - changes: map keyed by new-version line index (unchanged + expanding entries).
+//   - removals: slice of contracting entries (removed lines, no position in the new version).
+//
+// This method is only called from Update(), which is only callable on a fully constructed
+// Instance — so the history is guaranteed non-empty and latest() is guaranteed non-nil.
+func (i *Instance) changes(newValue string) (map[int]LineChange, []LineChange) {
 
 	lastSnapshot := i.history.latest()
-	if lastSnapshot == nil {
-		return nil, errors.New("line map: no snapshot available")
-	}
 	currentLines := lastSnapshot.lines
 	newLines := strings.Split(newValue, "\n")
 
 	changes := make(map[int]LineChange)
+	var removals []LineChange
 
 	// Compute LCS table for the two line slices.
 	//
@@ -90,19 +87,14 @@ func (i *Instance) changes(newValue string) (map[int]LineChange, error) {
 	//
 	ci, ni := 0, 0
 	for _, commonLine := range lcs {
-		// Find the next occurrence of commonLine in both slices.
-		//
 		// Lines removed from current (contracting): lines in current before this common line.
 		for ci < len(currentLines) && currentLines[ci] != commonLine {
-			change, _ := newLineChange("contracting", ci, ci, ci)
-			change.contractingLines = []string{currentLines[ci]}
-			changes[ci] = *change
+			removals = append(removals, newContractingChange(ci, currentLines[ci]))
 			ci++
 		}
 
 		// Lines added in new (expanding): lines in new before this common line.
 		for ni < len(newLines) && newLines[ni] != commonLine {
-			// These new lines map back to the current position in the original.
 			originLine := ci
 			if originLine >= len(currentLines) {
 				originLine = len(currentLines) - 1
@@ -110,15 +102,12 @@ func (i *Instance) changes(newValue string) (map[int]LineChange, error) {
 			if originLine < 0 {
 				originLine = 0
 			}
-			change, _ := newLineChange("expanding", originLine, ni, ni)
-			change.expandingLines = []string{newLines[ni]}
-			changes[ni] = *change
+			changes[ni] = newExpandingChange(originLine, ni, newLines[ni])
 			ni++
 		}
 
 		// This line is unchanged — record the mapping so we can trace origin.
-		change, _ := newLineChange("unchanged", ci, ni, ni)
-		changes[ni] = *change
+		changes[ni] = newUnchangedChange(ci, ni, commonLine)
 
 		ci++
 		ni++
@@ -126,9 +115,7 @@ func (i *Instance) changes(newValue string) (map[int]LineChange, error) {
 
 	// Remaining lines in current that were removed (contracting).
 	for ci < len(currentLines) {
-		change, _ := newLineChange("contracting", ci, ci, ci)
-		change.contractingLines = []string{currentLines[ci]}
-		changes[ci] = *change
+		removals = append(removals, newContractingChange(ci, currentLines[ci]))
 		ci++
 	}
 
@@ -138,13 +125,11 @@ func (i *Instance) changes(newValue string) (map[int]LineChange, error) {
 		if originLine < 0 {
 			originLine = 0
 		}
-		change, _ := newLineChange("expanding", originLine, ni, ni)
-		change.expandingLines = []string{newLines[ni]}
-		changes[ni] = *change
+		changes[ni] = newExpandingChange(originLine, ni, newLines[ni])
 		ni++
 	}
 
-	return changes, nil
+	return changes, removals
 }
 
 // computeLCS - computes the longest common subsequence (LCS) of two string slices
@@ -249,7 +234,7 @@ func (i *Instance) LatestSnapshot() *LinesSnapshot {
 	return i.history.latest()
 }
 
-// LineHistory - returns how a line is evolved over the snapshots in the history. It returns a slice of
+// LineHistory - returns how a line evolved over the snapshots in the history. It returns a slice of
 // LineChange structs that represent the state of the line in each snapshot (e.g. unchanged, expanded, contracted).
 func (i *Instance) LineHistory(lineNumber int) []LineChange {
 	var history []LineChange
@@ -265,19 +250,19 @@ func (i *Instance) LineHistory(lineNumber int) []LineChange {
 		change, exists := (*snapshot.changes)[currentLine]
 		if !exists {
 			// Line was not part of any change, it maps 1:1.
-			history = append(history, LineChange{
-				_type:  "unchanged",
-				origin: currentLine,
-			})
+			// Resolve content from the snapshot lines.
+			content := ""
+			if currentLine >= 0 && currentLine < len(snapshot.lines) {
+				content = snapshot.lines[currentLine]
+			}
+			history = append(history, newUnchangedChange(currentLine, currentLine, content))
 			continue
 		}
 
 		history = append(history, change)
 
-		if change._type == "contracting" {
-			currentLine = change.origin
-		} else if change._type == "expanding" {
-			currentLine = change.origin
+		if change.Type() == "contracting" || change.Type() == "expanding" {
+			currentLine = change.Origin()
 		}
 	}
 

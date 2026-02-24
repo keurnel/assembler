@@ -2,7 +2,6 @@ package lineMap
 
 import (
 	"crypto/sha256"
-	"errors"
 	"fmt"
 	"strings"
 )
@@ -11,85 +10,89 @@ const (
 	LineSnapshotTypeInitial  = "initial"
 	LineSnapshotTypeChange   = "change"
 	LineSnapshotTypeNoChange = "no-change"
-
-	LineSnapshotTypeExpanding   = "expanding"
-	LineSnapshotTypeContracting = "contracting"
 )
 
 type LineChange struct {
-	_type  string // Expanding, Contracting, Unchanged
-	origin int    // Line number in the original source (before the change)
-
-	// Expanding information.
-	//
-	expandingRangeStart int      // Starting line number in the new source (after the change)
-	expandingRangeEnd   int      // Ending line number in the new source (after the change)
-	expandingLines      []string // Lines that were added to the new source.
-
-	// Contracting information.
-	//
-	contractingRangeStart int      // Starting line number in the original source (before the change)
-	contractingRangeEnd   int      // Ending line number in the original source (before the change)
-	contractingLines      []string // Lines that were removed from the original source.
+	_type    string // "expanding", "contracting", or "unchanged" — set by factory, never by callers.
+	origin   int    // 0-based line index in the previous (old) version.
+	newIndex int    // 0-based line index in the new version. -1 for contracting (line no longer exists).
+	content  string // The actual text of the line.
 }
 
-func newLineChange(_type string, origin, rangeStart, rangeEnd int) (*LineChange, error) {
-	if rangeStart > rangeEnd || rangeEnd < rangeStart || rangeStart < 0 || rangeEnd < 0 {
-		return nil, errors.New("invalid line change range")
-	}
+// --- Accessor methods (FR-5.5) ---
 
-	if _type != "expanding" && _type != "contracting" && _type != "unchanged" {
-		return nil, errors.New("invalid line change type")
-	}
+// Type returns the change type: "unchanged", "expanding", or "contracting".
+func (lc LineChange) Type() string { return lc._type }
 
-	if _type == "unchanged" && (rangeStart != rangeEnd) {
-		return nil, errors.New("unchanged line change must have rangeStart equal to rangeEnd")
-	}
+// Origin returns the 0-based line index in the previous (old) version.
+func (lc LineChange) Origin() int { return lc.origin }
 
-	if _type == "expanding" {
-		return &LineChange{
-			_type:               _type,
-			origin:              origin,
-			expandingRangeStart: rangeStart,
-			expandingRangeEnd:   rangeEnd,
-		}, nil
-	}
+// NewIndex returns the 0-based line index in the new version.
+// Returns -1 for contracting changes (the line no longer exists).
+func (lc LineChange) NewIndex() int { return lc.newIndex }
 
-	if _type == "contracting" {
-		return &LineChange{
-			_type:                 _type,
-			origin:                origin,
-			contractingRangeStart: rangeStart,
-			contractingRangeEnd:   rangeEnd,
-		}, nil
-	}
+// Content returns the actual text of the line.
+func (lc LineChange) Content() string { return lc.content }
 
-	return &LineChange{
-		_type:  _type,
-		origin: origin,
-	}, nil
+// --- Factory functions (FR-5.2) ---
+
+// newUnchangedChange creates a LineChange that records an unchanged line.
+// Captures where it was (origin), where it is now (newIndex), and its content.
+func newUnchangedChange(origin, newIndex int, content string) LineChange {
+	return LineChange{
+		_type:    "unchanged",
+		origin:   origin,
+		newIndex: newIndex,
+		content:  content,
+	}
 }
 
-// String - returns a string representation of the LineChange for debugging purposes.
-func (lc *LineChange) String() string {
+// newExpandingChange creates a LineChange that records an inserted/added line.
+// Captures the nearest origin line, the position in the new version, and the
+// inserted line content.
+func newExpandingChange(origin, newIndex int, content string) LineChange {
+	return LineChange{
+		_type:    "expanding",
+		origin:   origin,
+		newIndex: newIndex,
+		content:  content,
+	}
+}
+
+// newContractingChange creates a LineChange that records a removed line.
+// Captures the position in the old version and the removed line content.
+// newIndex is -1 because the line no longer exists in the new version.
+func newContractingChange(origin int, content string) LineChange {
+	return LineChange{
+		_type:    "contracting",
+		origin:   origin,
+		newIndex: -1,
+		content:  content,
+	}
+}
+
+// String returns a human-readable representation of the LineChange for debugging.
+func (lc LineChange) String() string {
 	switch lc._type {
-	case LineSnapshotTypeExpanding:
-		return fmt.Sprintf("LineChange{Type: %s, Origin: %d, ExpandingRange: [%d-%d], ExpandingLines: %v}",
-			lc._type, lc.origin, lc.expandingRangeStart, lc.expandingRangeEnd, lc.expandingLines)
-	case LineSnapshotTypeContracting:
-		return fmt.Sprintf("LineChange{Type: %s, Origin: %d, ContractingRange: [%d-%d], ContractingLines: %v}",
-			lc._type, lc.origin, lc.contractingRangeStart, lc.contractingRangeEnd, lc.contractingLines)
+	case "expanding":
+		return fmt.Sprintf("LineChange{Type: %s, Origin: %d, NewIndex: %d, Content: %q}",
+			lc._type, lc.origin, lc.newIndex, lc.content)
+	case "contracting":
+		return fmt.Sprintf("LineChange{Type: %s, Origin: %d, Content: %q}",
+			lc._type, lc.origin, lc.content)
 	default:
-		return fmt.Sprintf("LineChange{Type: %s, Origin: %d}", lc._type, lc.origin)
+		return fmt.Sprintf("LineChange{Type: %s, Origin: %d, NewIndex: %d, Content: %q}",
+			lc._type, lc.origin, lc.newIndex, lc.content)
 	}
 }
 
 type LinesSnapshot struct {
-	_type   string
-	hash    string
-	source  string
-	lines   []string
-	changes *map[int]LineChange
+	_type    string
+	hash     string
+	source   string
+	lines    []string
+	changes  *map[int]LineChange // Keyed by new-version line index (unchanged + expanding entries).
+	removals []LineChange        // Contracting entries (removed lines, no position in the new version).
 }
 
 type History struct {
@@ -138,16 +141,16 @@ func (h *History) LineOrigin(lineNumber int) int {
 			continue
 		}
 
-		switch change._type {
-		case LineSnapshotTypeExpanding:
+		switch change.Type() {
+		case "expanding":
 			// This line was inserted by the preprocessor; it has no origin.
 			return -1
-		case LineSnapshotTypeContracting:
+		case "contracting":
 			// This line was removed; it has no origin.
 			return -1
 		default:
 			// unchanged — trace through to the original position
-			current = change.origin
+			current = change.Origin()
 		}
 	}
 
@@ -168,18 +171,31 @@ func (h *History) snapshotInitial(instance *Instance) {
 	})
 }
 
-// snapshotUpdate - creates a subsequent snapshot (change or no-change) and
-// appends it to the history. This method is only called from Update(). It
-// accepts only LineSnapshotTypeChange or LineSnapshotTypeNoChange — it does
-// not accept LineSnapshotTypeInitial, so a second initial snapshot is
-// structurally impossible.
-func (h *History) snapshotUpdate(instance *Instance, _type string, changes *map[int]LineChange) {
+// snapshotNoChange - records that the source did not change between this
+// update and the previous snapshot. Called only from Update().
+// No _type parameter — the type is determined by which method is called.
+func (h *History) snapshotNoChange(instance *Instance) {
 	h.items = append(h.items, LinesSnapshot{
-		_type:   _type,
+		_type:   LineSnapshotTypeNoChange,
 		hash:    h.snapshotHashGenerate(instance.value),
 		source:  instance.value,
 		lines:   strings.Split(instance.value, "\n"),
-		changes: changes,
+		changes: nil,
+	})
+}
+
+// snapshotChange - records a diff between this update and the previous
+// snapshot. Called only from Update(). The changes map is keyed by new-version
+// line index (unchanged + expanding). The removals slice contains contracting
+// entries. No _type parameter — the type is determined by which method is called.
+func (h *History) snapshotChange(instance *Instance, changes map[int]LineChange, removals []LineChange) {
+	h.items = append(h.items, LinesSnapshot{
+		_type:    LineSnapshotTypeChange,
+		hash:     h.snapshotHashGenerate(instance.value),
+		source:   instance.value,
+		lines:    strings.Split(instance.value, "\n"),
+		changes:  &changes,
+		removals: removals,
 	})
 }
 

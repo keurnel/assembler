@@ -65,38 +65,108 @@ snapshot.
 - **FR-3.1** The initial snapshot must split `Instance.value` into lines and store them
   in the history.
 - **FR-3.2** The initial snapshot must have type `LineSnapshotTypeInitial`.
-- **FR-3.3** `History` exposes two separate internal snapshot methods:
+- **FR-3.3** `History` exposes separate internal snapshot methods:
   - `snapshotInitial(instance)` — creates the initial snapshot. Called only from `New()`.
-  - `snapshotUpdate(instance, type, changes)` — creates subsequent snapshots. Called only
-    from `Update()`. Accepts only `LineSnapshotTypeChange` or `LineSnapshotTypeNoChange`.
-- **FR-3.4** Because `snapshotInitial` is only called from `New()`, and `snapshotUpdate`
-  does not accept `LineSnapshotTypeInitial`, a second initial snapshot cannot be created.
-  There is no `hasInitialSnapshot` flag and no runtime guard — the invariant is enforced
-  by the API surface, not by conditional checks.
+  - `snapshotNoChange(instance)` — records a no-change update. Called only from `Update()`.
+  - `snapshotChange(instance, changes)` — records a change update. Called only from `Update()`.
+- **FR-3.4** Because `snapshotInitial` is only called from `New()`, and neither
+  `snapshotNoChange` nor `snapshotChange` produce an initial snapshot, a second initial
+  snapshot cannot be created. No snapshot method accepts a `_type` string parameter —
+  the snapshot type is determined by which method is called.
 
 ### FR-4: Updating (Snapshotting)
 
-- **FR-4.1** `Update(newValue)` can be called on any `*Instance` without precondition checks,
-  because the initial snapshot is guaranteed to exist (see FR-2).
-- **FR-4.2** If the new value is identical to the latest snapshot (compared by hash), a
-  `LineSnapshotTypeNoChange` snapshot must be created with `nil` changes.
-- **FR-4.3** If the new value differs from the latest snapshot, a `LineSnapshotTypeChange`
-  snapshot must be created with a computed change map.
-- **FR-4.4** After a successful update, `Instance.value` must reflect the new value.
+`Update()` transitions an `Instance` to a new source value and records the
+transformation in the history. Because `New()` guarantees at least one snapshot
+exists (FR-2), `Update()` can rely on `latest()` always returning a valid
+snapshot. There are no precondition checks or error paths.
+
+- **FR-4.1** `Update(newValue)` is infallible — it cannot fail because the initial
+  snapshot is guaranteed to exist (FR-2) and change detection operates on data that
+  is always present.
+- **FR-4.2** If the new value is identical to the latest snapshot (compared by hash),
+  a no-change snapshot is recorded via `snapshotNoChange()`.
+- **FR-4.3** If the new value differs from the latest snapshot, a change snapshot is
+  recorded via `snapshotChange()` with the computed change map.
+- **FR-4.4** After an update, `Instance.value` must reflect the new value.
+- **FR-4.5** `History` exposes two separate internal methods for update snapshots
+  (replacing the single `snapshotUpdate`):
+  - `snapshotNoChange(instance)` — records that the source did not change.
+  - `snapshotChange(instance, changes)` — records a diff. The `changes` parameter is
+    always non-nil.
+  Neither method accepts a `_type` string parameter — the snapshot type is determined
+  by which method is called, not by a runtime value.
 
 ### FR-5: Change Detection (Diff)
 
-- **FR-5.1** Changes between two source versions must be computed using a Longest Common
-  Subsequence (LCS) algorithm at the line level.
-- **FR-5.2** Each line in the new version must be classified as one of:
-  - **unchanged** — the line exists at the same logical position in both versions.
-  - **expanding** — the line is new (inserted/added) in the new version.
-  - **contracting** — the line was removed from the old version.
-- **FR-5.3** Each `LineChange` must record:
-  - The change type (`unchanged`, `expanding`, `contracting`).
-  - The origin line number (index in the previous version).
-  - For expanding changes: the range and content of inserted lines.
-  - For contracting changes: the range and content of removed lines.
+Change detection produces a detailed, per-line diff between two source versions.
+Every line in both the old and new version is accounted for. Each classification
+is represented by a dedicated factory function that only accepts the fields
+relevant to that variant. There is no generic constructor that accepts a type
+string — the variant is determined by which factory is called.
+
+#### FR-5.1: Algorithm
+
+- **FR-5.1.1** Changes between two source versions must be computed using a Longest
+  Common Subsequence (LCS) algorithm at the line level.
+
+#### FR-5.2: Change Variants and Factories
+
+Each line is classified as one of three variants, each with its own factory:
+
+- **FR-5.2.1** `newUnchangedChange(origin, newIndex, content)` — the line exists in
+  both versions. Records where it was (origin), where it is now (newIndex), and its
+  content. This enables consumers to see positional shifts even for unchanged lines.
+- **FR-5.2.2** `newExpandingChange(origin, newIndex, content)` — the line is new
+  (inserted/added) in the new version. Records the nearest origin line it maps to, its
+  position in the new version (newIndex), and the inserted line content.
+- **FR-5.2.3** `newContractingChange(origin, content)` — the line was removed from the
+  old version. Records its position in the old version (origin) and the removed line
+  content.
+
+#### FR-5.3: Infallible Construction
+
+- **FR-5.3.1** All three factory functions are infallible — they return a `LineChange`
+  value (not a pointer, no error).
+- **FR-5.3.2** Invalid states are prevented by the function signatures: each factory
+  only accepts the parameters that are meaningful for its variant.
+- **FR-5.3.3** There is no generic `newLineChange(_type string, ...)` constructor. The
+  change type is set internally by each factory, not passed as a runtime parameter.
+
+#### FR-5.4: LineChange Detail
+
+Every `LineChange` must carry enough information for a consumer to produce a
+detailed diff report without needing to look up the snapshot source:
+
+- **FR-5.4.1** `_type` — always set by the factory, never by callers. One of
+  `"unchanged"`, `"expanding"`, `"contracting"`.
+- **FR-5.4.2** `origin` — the 0-based line index in the previous (old) version. Present
+  on all three variants.
+- **FR-5.4.3** `newIndex` — the 0-based line index in the new version. Present on
+  `unchanged` and `expanding` changes. Set to `-1` for `contracting` changes (the line
+  no longer exists in the new version).
+- **FR-5.4.4** `content` — the actual text of the line. For `unchanged` and `expanding`
+  this is the line in the new version. For `contracting` this is the line that was
+  removed.
+
+#### FR-5.5: Accessor Methods
+
+`LineChange` must expose read-only accessor methods so consumers don't access
+internal fields directly:
+
+- **FR-5.5.1** `Type() string` — returns the change type.
+- **FR-5.5.2** `Origin() int` — returns the origin line index.
+- **FR-5.5.3** `NewIndex() int` — returns the new line index (`-1` for contracting).
+- **FR-5.5.4** `Content() string` — returns the line content.
+- **FR-5.5.5** `String() string` — returns a human-readable representation for debugging.
+
+#### FR-5.6: Change Map Keying
+
+- **FR-5.6.1** The change map returned by `changes()` must be keyed by the **new version
+  line index** for `unchanged` and `expanding` entries.
+- **FR-5.6.2** Contracting entries (removed lines) must be stored in a separate
+  `removals` slice on the snapshot rather than mixed into the same map, because they
+  have no position in the new version.
 
 ### FR-6: Line Origin Tracing
 

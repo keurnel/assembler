@@ -81,10 +81,7 @@ func TestNew(t *testing.T) {
 	t.Run("Update works immediately after New", func(t *testing.T) {
 		instance := newTestInstance(t, "line1\nline2")
 
-		err := instance.Update("line1\nline2\nline3")
-		if err != nil {
-			t.Fatalf("Expected Update to succeed immediately after New(), got '%s'", err.Error())
-		}
+		instance.Update("line1\nline2\nline3")
 
 		if len(instance.history.items) != 2 {
 			t.Errorf("Expected 2 history items, got %d", len(instance.history.items))
@@ -101,10 +98,7 @@ func TestInstance_Update(t *testing.T) {
 	t.Run("Expanding a line", func(t *testing.T) {
 		instance := newTestInstance(t, "line1\nline2\nline3")
 
-		err := instance.Update("line1\nline2\nline3\nline4")
-		if err != nil {
-			t.Errorf("Expected Update to succeed when updating with a new value, got '%s'", err.Error())
-		}
+		instance.Update("line1\nline2\nline3\nline4")
 
 		if len(instance.history.items) != 2 {
 			t.Errorf("Expected Instance.history to have 2 items after Update, got %d", len(instance.history.items))
@@ -132,10 +126,7 @@ func TestInstance_Update(t *testing.T) {
 	t.Run("Expanding a line stores changes in snapshot", func(t *testing.T) {
 		instance := newTestInstance(t, "line1\nline2\nline3")
 
-		err := instance.Update("line1\nline2\nline3\nline4")
-		if err != nil {
-			t.Fatalf("Expected Update to succeed, got '%s'", err.Error())
-		}
+		instance.Update("line1\nline2\nline3\nline4")
 
 		snapshot := instance.history.items[1]
 		if snapshot.changes == nil {
@@ -147,8 +138,14 @@ func TestInstance_Update(t *testing.T) {
 		if !exists {
 			t.Fatal("Expected an expanding change at new line index 3")
 		}
-		if change._type != "expanding" {
-			t.Errorf("Expected change type 'expanding', got '%s'", change._type)
+		if change.Type() != "expanding" {
+			t.Errorf("Expected change type 'expanding', got '%s'", change.Type())
+		}
+		if change.NewIndex() != 3 {
+			t.Errorf("Expected NewIndex 3, got %d", change.NewIndex())
+		}
+		if change.Content() != "line4" {
+			t.Errorf("Expected content 'line4', got '%s'", change.Content())
 		}
 	})
 	// ==============================================================
@@ -159,22 +156,63 @@ func TestInstance_Update(t *testing.T) {
 	t.Run("Contracting lines", func(t *testing.T) {
 		instance := newTestInstance(t, "line1\nline2\nline3\nline4")
 
-		err := instance.Update("line1\nline4")
-		if err != nil {
-			t.Fatalf("Expected Update to succeed, got '%s'", err.Error())
-		}
+		instance.Update("line1\nline4")
 
 		if len(instance.history.items) != 2 {
 			t.Fatalf("Expected 2 history items, got %d", len(instance.history.items))
 		}
 
 		snapshot := instance.history.items[1]
-		if snapshot.changes == nil {
-			t.Fatal("Expected changes to be non-nil")
-		}
 
 		if len(snapshot.lines) != 2 {
 			t.Errorf("Expected 2 lines after contraction, got %d", len(snapshot.lines))
+		}
+
+		// Removed lines should be in the removals slice, not in the changes map.
+		if len(snapshot.removals) != 2 {
+			t.Fatalf("Expected 2 removals, got %d", len(snapshot.removals))
+		}
+
+		// First removal: "line2" was at origin index 1.
+		r0 := snapshot.removals[0]
+		if r0.Type() != "contracting" {
+			t.Errorf("Expected removal type 'contracting', got '%s'", r0.Type())
+		}
+		if r0.Origin() != 1 {
+			t.Errorf("Expected removal origin 1, got %d", r0.Origin())
+		}
+		if r0.Content() != "line2" {
+			t.Errorf("Expected removal content 'line2', got '%s'", r0.Content())
+		}
+		if r0.NewIndex() != -1 {
+			t.Errorf("Expected removal newIndex -1, got %d", r0.NewIndex())
+		}
+
+		// Second removal: "line3" was at origin index 2.
+		r1 := snapshot.removals[1]
+		if r1.Origin() != 2 {
+			t.Errorf("Expected removal origin 2, got %d", r1.Origin())
+		}
+		if r1.Content() != "line3" {
+			t.Errorf("Expected removal content 'line3', got '%s'", r1.Content())
+		}
+
+		// Unchanged lines should be in the changes map with content.
+		change0, exists := (*snapshot.changes)[0]
+		if !exists {
+			t.Fatal("Expected unchanged entry at new index 0")
+		}
+		if change0.Type() != "unchanged" {
+			t.Errorf("Expected type 'unchanged', got '%s'", change0.Type())
+		}
+		if change0.Origin() != 0 {
+			t.Errorf("Expected origin 0, got %d", change0.Origin())
+		}
+		if change0.Content() != "line1" {
+			t.Errorf("Expected content 'line1', got '%s'", change0.Content())
+		}
+		if change0.NewIndex() != 0 {
+			t.Errorf("Expected newIndex 0, got %d", change0.NewIndex())
 		}
 	})
 	// ==============================================================
@@ -185,10 +223,7 @@ func TestInstance_Update(t *testing.T) {
 	t.Run("No change update creates NoChange snapshot", func(t *testing.T) {
 		instance := newTestInstance(t, "line1\nline2")
 
-		err := instance.Update("line1\nline2")
-		if err != nil {
-			t.Fatalf("Expected Update to succeed, got '%s'", err.Error())
-		}
+		instance.Update("line1\nline2")
 
 		if len(instance.history.items) != 2 {
 			t.Fatalf("Expected 2 history items, got %d", len(instance.history.items))
@@ -212,16 +247,10 @@ func TestInstance_Update(t *testing.T) {
 		instance := newTestInstance(t, "include_marker\nmov rax, 1")
 
 		// Step 1: Include expands "include_marker" into 3 lines
-		err := instance.Update("; FILE: header.kasm\nmov rbx, 0\nxor rcx, rcx\n; END FILE: header.kasm\nmov rax, 1")
-		if err != nil {
-			t.Fatalf("Step 1 failed: %s", err.Error())
-		}
+		instance.Update("; FILE: header.kasm\nmov rbx, 0\nxor rcx, rcx\n; END FILE: header.kasm\nmov rax, 1")
 
 		// Step 2: Macro expansion replaces "mov rax, 1" with two lines
-		err = instance.Update("; FILE: header.kasm\nmov rbx, 0\nxor rcx, rcx\n; END FILE: header.kasm\npush 1\npop rax")
-		if err != nil {
-			t.Fatalf("Step 2 failed: %s", err.Error())
-		}
+		instance.Update("; FILE: header.kasm\nmov rbx, 0\nxor rcx, rcx\n; END FILE: header.kasm\npush 1\npop rax")
 
 		if instance.SnapshotCount() != 3 {
 			t.Errorf("Expected 3 snapshots (initial + 2 updates), got %d", instance.SnapshotCount())
@@ -242,10 +271,7 @@ func TestInstance_Update(t *testing.T) {
 		instance := newTestInstance(t, "line1\nline2\nline3")
 
 		// Add a line at the beginning, shifting everything down
-		err := instance.Update("new_line\nline1\nline2\nline3")
-		if err != nil {
-			t.Fatalf("Update failed: %s", err.Error())
-		}
+		instance.Update("new_line\nline1\nline2\nline3")
 
 		// "line1" was at index 0, now at index 1
 		origin := instance.LineOrigin(1)
@@ -268,10 +294,7 @@ func TestInstance_Update(t *testing.T) {
 		instance := newTestInstance(t, "line1\nline2")
 
 		// Insert a new line in the middle
-		err := instance.Update("line1\nnew_inserted_line\nline2")
-		if err != nil {
-			t.Fatalf("Update failed: %s", err.Error())
-		}
+		instance.Update("line1\nnew_inserted_line\nline2")
 
 		// The inserted line should return -1 (no origin in the initial source)
 		origin := instance.LineOrigin(1)
