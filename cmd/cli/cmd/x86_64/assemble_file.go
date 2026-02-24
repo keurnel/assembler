@@ -2,7 +2,9 @@ package x86_64
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -19,219 +21,164 @@ var AssembleFileCmd = &cobra.Command{
 	Short:   "Assemble an _64 assembly file into a binary file.",
 	Long:    `Assemble an _64 assembly file into a binary file.`,
 	Run: func(cmd *cobra.Command, args []string) {
-
-		if len(args) < 1 {
-			cmd.PrintErrln("Error: No assembly file provided.")
-			return
+		if err := runAssembleFile(cmd, args); err != nil {
+			cmd.PrintErrln("Error:", err)
 		}
-
-		assemblyFile := args[0]
-		if assemblyFile == "" {
-			cmd.PrintErrln("Error: Assembly file path is empty.")
-			return
-		}
-
-		// Get current working directory
-		cwd, err := os.Getwd()
-		if err != nil {
-			cmd.PrintErrln("Error: Unable to get current working directory:", err)
-			return
-		}
-
-		fullPath := cwd + string(os.PathSeparator) + assemblyFile
-		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-			cmd.PrintErrln("Error: Assembly file does not exist at path:", fullPath)
-			return
-		}
-
-		// Read content of singular assembly file
-		//
-		sourceBytes, err := os.ReadFile(fullPath)
-		if err != nil {
-			cmd.PrintErrln("Error: Failed to read assembly file:", err)
-			return
-		}
-		source := string(sourceBytes)
-
-		//	==============================================================================
-		//
-		//	Loading architecture instructions
-		//
-		//	==============================================================================
-
-		groups := make(map[string]architecture.InstructionGroup)
-		for groupName, instructions := range _64.Instructions() {
-			groups[groupName] = *architecture.FromSlice(groupName, instructions)
-		}
-
-		//	==============================================================================
-		//
-		//	Verifying the instructions to ensure correctness and validity
-		//
-		//	==============================================================================
-
-		// todo: implement instruction verification logic here
-
-		//	==============================================================================
-		//
-		//	Debug information for pre-processing and assembly setup.
-		//
-		//
-		//	==============================================================================
-
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-
-		waitGroup := sync.WaitGroup{}
-
-		debugInformation := kasm.SourceDebugInformationMake(source)
-		canListen := debugInformation.CanListen()
-		if canListen != nil {
-			cmd.PrintErrln("Error: Failed to initialize debug information listener:", canListen)
-			return
-		}
-
-		waitGroup.Add(1)
-		go debugInformation.Listen(ctx, &waitGroup)
-
-		// Example expand of line number 20
-		debugInformation.ExpandLine(20, []int{21, 22, 23})
-		println(debugInformation.LineNumberToOrigin(23))
-
-		// Publish event o n the channel to expand line number 30 into 3 lines
-		debugInformation.ExpansionChannel <- kasm.ExpansionEvent{
-			LineNumber:         30,
-			ExpandedLinesCount: 3,
-		}
-
-		// Send close after 5 seconds
-		go func() {
-			time.Sleep(1 * time.Second)
-			cancel()
-		}()
-
-		waitGroup.Wait()
-
-		// Initialize a lineMap instance to track how lines transform during
-		// pre-processing. This allows us to trace any line in the final
-		// processed source back to its original location in the source file.
-		//
-		lineMapSource, err := lineMap.LoadSource(fullPath)
-		if err != nil {
-			cmd.PrintErrln("Error: Failed to load source file:", err)
-			return
-		}
-
-		lm := lineMap.New(source, lineMapSource)
-
-		// Step 1: Handle inclusion of other `.kasm` files in the source code.
-		//
-		source, inclusions := kasm.PreProcessingHandleIncludes(source)
-		inclusionPaths := make(map[string]bool)
-		for _, inclusion := range inclusions {
-			if inclusionPaths[inclusion.IncludedFilePath] {
-				message := "pre-processing error: Circular inclusion detected for file '" + inclusion.IncludedFilePath + "' at line " + string(inclusion.LineNumber)
-				panic(message)
-			}
-			inclusionPaths[inclusion.IncludedFilePath] = true
-		}
-
-		// Snapshot after includes — lines may have expanded.
-		lm.Update(source)
-
-		// Step 2: Handle macros in the source code.
-		//
-		macros := kasm.PreProcessingMacroTable(source)
-		kasm.PreProcessingColectMacroCalls(source, macros)
-		source = kasm.PreProcessingReplaceMacroCalls(source, macros)
-
-		// Snapshot after macro expansion — lines may have expanded or contracted.
-		lm.Update(source)
-
-		// Step 3: Handle conditional assembly directives in the source code.
-		//
-		symbolTable := kasm.PreProcessingCreateSymbolTable(source, macros)
-		source = kasm.PreProcessingHandleConditionals(source, symbolTable)
-
-		// Snapshot after conditional processing — lines may have been removed.
-		lm.Update(source)
-
-		// Print history of line transformations for debugging
-		lineHistory := lm.LineHistory(14)
-		for i, lineChange := range lineHistory {
-			println("Index:", i, lineChange.String())
-		}
-
-		return
-
-		//	==============================================================================
-		//
-		//	Pre-processing of the assembly source code
-		//
-		//	==============================================================================
-
-		//	==============================================================================
-		//
-		//	Assembling the source code into machine code
-		//
-		//	==============================================================================
-
-		// Lexical analysis
-		//
-		lexer := kasm.LexerNew(source)
-		tokens := lexer.Start()
-
-		// Parsing
-		//
-		parser := kasm.ParserNew(tokens)
-		err = parser.Parse()
-		if err != nil {
-			cmd.PrintErrln("Error: Failed to parse assembly source code:", err)
-			return
-		}
-
-		// The lineMap instance `lm` can now be used to trace any line in the
-		// assembled output back to its original source location:
-		//   originalLine := lm.LineOrigin(processedLine)
-		_ = lm
-
-		return
 	},
 }
 
-//func assembleFile(filePath string) (string, error) {
-//
-//	// Read content of singular assembly file
-//	//
-//	assembly, err := os.ReadFile(filePath)
-//	if err != nil {
-//		return "", err
-//	}
-//
-//	// When the assembly file is empty, return an error
-//	// indicating that the assembly file is empty and
-//	// cannot be assembled.
-//	//
-//	if len(assembly) == 0 {
-//		return "", errors.New("Assemble error: Assembly file is empty")
-//	}
-//
-//	// Perform pre-processing steps on the assembly code
-//	//
-//	source := asm.PreProcessingRemoveComments(string(assembly))
-//	source = asm.PreProcessingTrimWhitespace(source)
-//	source = asm.PreProcessingRemoveEmptyLines(source)
-//
-//	// Assemble the pre-processed assembly code into machine code using
-//	// the _64 assembler.
-//	//
-//	assembler := _64.New(source)
-//	machineCode, err := assembler.Assemble()
-//	if err != nil {
-//		return "", err
-//	}
-//
-//	// Return the assembled machine code as a string.
-//	//
-//	return string(machineCode), nil
-//}
+// runAssembleFile orchestrates the full assembly pipeline: resolve the file,
+// load architecture instructions, run pre-processing, and assemble.
+func runAssembleFile(cmd *cobra.Command, args []string) error {
+	fullPath, err := resolveFilePath(args)
+	if err != nil {
+		return err
+	}
+
+	loadArchitectureInstructions()
+
+	source, err := readSourceFile(fullPath)
+	if err != nil {
+		return err
+	}
+
+	runDebugInformationDemo(source)
+
+	tracker, err := lineMap.Track(fullPath)
+	if err != nil {
+		return fmt.Errorf("failed to initialise line tracker: %w", err)
+	}
+
+	source = preProcess(source, tracker)
+
+	// Print history of line transformations for debugging.
+	for i, change := range tracker.History(1) {
+		println("Index:", i, change.String())
+	}
+
+	_ = source
+	return nil
+}
+
+// resolveFilePath validates the CLI arguments and returns the absolute path
+// to the assembly file.
+func resolveFilePath(args []string) (string, error) {
+	if len(args) < 1 {
+		return "", fmt.Errorf("no assembly file provided")
+	}
+	if args[0] == "" {
+		return "", fmt.Errorf("assembly file path is empty")
+	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("unable to get current working directory: %w", err)
+	}
+
+	fullPath := filepath.Join(cwd, args[0])
+	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+		return "", fmt.Errorf("assembly file does not exist at path: %s", fullPath)
+	}
+
+	return fullPath, nil
+}
+
+// readSourceFile reads the assembly source file and returns its content.
+func readSourceFile(path string) (string, error) {
+	sourceBytes, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("failed to read assembly file: %w", err)
+	}
+	return string(sourceBytes), nil
+}
+
+// loadArchitectureInstructions loads and indexes the x86_64 instruction set.
+func loadArchitectureInstructions() map[string]architecture.InstructionGroup {
+	groups := make(map[string]architecture.InstructionGroup)
+	for groupName, instructions := range _64.Instructions() {
+		groups[groupName] = *architecture.FromSlice(groupName, instructions)
+	}
+	return groups
+}
+
+// runDebugInformationDemo runs the temporary debug information listener demo.
+// TODO: remove or integrate properly once the debug pipeline is finalised.
+func runDebugInformationDemo(source string) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var wg sync.WaitGroup
+
+	debugInfo := kasm.SourceDebugInformationMake(source)
+	if err := debugInfo.CanListen(); err != nil {
+		println("Warning: debug listener unavailable:", err.Error())
+		return
+	}
+
+	wg.Add(1)
+	go debugInfo.Listen(ctx, &wg)
+
+	debugInfo.ExpandLine(20, []int{21, 22, 23})
+	println(debugInfo.LineNumberToOrigin(23))
+
+	debugInfo.ExpansionChannel <- kasm.ExpansionEvent{
+		LineNumber:         30,
+		ExpandedLinesCount: 3,
+	}
+
+	go func() {
+		time.Sleep(1 * time.Second)
+		cancel()
+	}()
+
+	wg.Wait()
+}
+
+// preProcess runs the three pre-processing phases (includes, macros,
+// conditionals) and snapshots each transformation in the tracker.
+func preProcess(source string, tracker *lineMap.Tracker) string {
+	source = preProcessIncludes(source, tracker)
+	source = preProcessMacros(source, tracker)
+	source = preProcessConditionals(source, tracker)
+	return source
+}
+
+// preProcessIncludes handles %include directives, detects circular inclusions,
+// and snapshots the result.
+func preProcessIncludes(source string, tracker *lineMap.Tracker) string {
+	source, inclusions := kasm.PreProcessingHandleIncludes(source)
+
+	seen := make(map[string]bool, len(inclusions))
+	for _, inc := range inclusions {
+		if seen[inc.IncludedFilePath] {
+			panic(fmt.Sprintf("pre-processing error: circular inclusion of '%s' at line %d",
+				inc.IncludedFilePath, inc.LineNumber))
+		}
+		seen[inc.IncludedFilePath] = true
+	}
+
+	tracker.Snapshot(source)
+	return source
+}
+
+// preProcessMacros builds the macro table, collects calls, expands them,
+// and snapshots the result.
+func preProcessMacros(source string, tracker *lineMap.Tracker) string {
+	macros := kasm.PreProcessingMacroTable(source)
+	kasm.PreProcessingColectMacroCalls(source, macros)
+	source = kasm.PreProcessingReplaceMacroCalls(source, macros)
+
+	tracker.Snapshot(source)
+	return source
+}
+
+// preProcessConditionals evaluates %ifdef / %ifndef / %else / %endif blocks,
+// and snapshots the result.
+func preProcessConditionals(source string, tracker *lineMap.Tracker) string {
+	macros := kasm.PreProcessingMacroTable(source)
+	symbolTable := kasm.PreProcessingCreateSymbolTable(source, macros)
+	source = kasm.PreProcessingHandleConditionals(source, symbolTable)
+
+	tracker.Snapshot(source)
+	return source
+}
