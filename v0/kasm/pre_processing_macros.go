@@ -30,8 +30,9 @@ func PreProcessingMacroTable(source string) map[string]Macro {
 	}
 
 	matches := macroDefRegex.FindAllStringSubmatch(source, -1)
+	matchIndices := macroDefRegex.FindAllStringIndex(source, -1)
 
-	for _, match := range matches {
+	for i, match := range matches {
 		// Select until the next %endmacro as the body of the macro
 		macroName := match[1]
 		paramCount := 0
@@ -42,10 +43,14 @@ func PreProcessingMacroTable(source string) map[string]Macro {
 		// Per-value regex: depends on the macro name, compiled once per macro (AR-6.4).
 		bodyRegex := regexp.MustCompile(`(?s)%macro\s+` + regexp.QuoteMeta(macroName) + `\s*\d*\s*(.*?)%endmacro`)
 		bodyMatch := bodyRegex.FindStringSubmatch(source)
-		macroBody := ""
-		if len(bodyMatch) > 1 {
-			macroBody = bodyMatch[1]
+
+		// FR-2.2.6: A %macro without a matching %endmacro is a pre-processing error.
+		if bodyMatch == nil {
+			lineNumber := strings.Count(source[:matchIndices[i][0]], "\n") + 1
+			panic(fmt.Sprintf("pre-processing error: %%macro '%s' at line %d has no matching %%endmacro", macroName, lineNumber))
 		}
+
+		macroBody := bodyMatch[1]
 
 		// Extract parameters from the macro body
 		//
@@ -156,6 +161,13 @@ func PreProcessingReplaceMacroCalls(source string, macroTable map[string]Macro) 
 			source = regexp.MustCompile(callPattern).ReplaceAllString(source, expandedBody)
 		}
 	}
+
+	// FR-2.5: Remove all %macro ... %endmacro definition blocks from the source
+	// after expansion. This must happen after all calls have been expanded so the
+	// body text is available during expansion. Blocks with zero calls are also
+	// removed (FR-2.5.3).
+	macroBlockRegex := regexp.MustCompile(`(?ms)^\s*%macro\s+\w+\s*\d*\s*\n.*?%endmacro\s*$`)
+	source = macroBlockRegex.ReplaceAllString(source, "")
 
 	return source
 }

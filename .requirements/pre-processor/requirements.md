@@ -23,7 +23,7 @@ raw source
                ▼
 ┌──────────────────────────────┐
 │ Phase 2: Macros              │  PreProcessingMacroTable
-│   %macro / %endmacro         │  PreProcessingColectMacroCalls
+│   %macro / %endmacro         │  PreProcessingCollectMacroCalls
 │   macro invocations          │  PreProcessingReplaceMacroCalls
 └──────────────┬───────────────┘
                │ source with macros expanded
@@ -228,7 +228,7 @@ Macro {
     Name        string                       // Macro name (e.g. "my_macro").
     Parameters  map[string]MacroParameter    // Parameters keyed by generated name (paramA, paramB, …).
     Body        string                       // Body text between %macro and %endmacro.
-    Calls       []MacroCall                  // Invocations found in the source (populated by ColectMacroCalls).
+    Calls       []MacroCall                  // Invocations found in the source (populated by CollectMacroCalls).
 }
 ```
 
@@ -304,6 +304,21 @@ traceability.
 - **FR-1.4.2** If there are no `%include` directives, the source is returned
   unchanged and the slice is empty.
 
+### FR-1.5: Recursive Includes
+
+- **FR-1.5.1** An included file may itself contain `%include` directives. The
+  pre-processor does **not** resolve these recursively within a single call to
+  `PreProcessingHandleIncludes`. Only top-level `%include` directives in the
+  input source are expanded.
+- **FR-1.5.2** Recursive resolution is the responsibility of the orchestrator.
+  If the orchestrator needs multi-level includes, it must call
+  `PreProcessingHandleIncludes` repeatedly until no `%include` directives
+  remain, tracking seen file paths externally to detect circular inclusion
+  chains.
+- **FR-1.5.3** The function itself detects duplicate `%include` directives
+  within a single invocation (FR-1.2.2), but cross-invocation cycle detection
+  is an orchestrator concern.
+
 ---
 
 ## FR-2: Macros
@@ -311,7 +326,7 @@ traceability.
 Macro processing has three functions that must be called in order:
 
 1. `PreProcessingMacroTable(source)` — extract definitions.
-2. `PreProcessingColectMacroCalls(source, macroTable)` — find invocations.
+2. `PreProcessingCollectMacroCalls(source, macroTable)` — find invocations.
 3. `PreProcessingReplaceMacroCalls(source, macroTable)` — expand invocations.
 
 ### FR-2.1: Macro Detection (`PreProcessingHasMacros`)
@@ -335,11 +350,13 @@ Macro processing has three functions that must be called in order:
 - **FR-2.2.4** If `PreProcessingHasMacros` returns `false`, an empty table is
   returned immediately.
 - **FR-2.2.5** The returned `Macro.Calls` slice is initially empty — calls are
-  populated by `PreProcessingColectMacroCalls`.
+  populated by `PreProcessingCollectMacroCalls`.
+- **FR-2.2.6** A `%macro` directive without a matching `%endmacro` must cause a
+  panic with a message containing the macro name and line number.
 
-### FR-2.3: Macro Call Collection (`PreProcessingColectMacroCalls`)
+### FR-2.3: Macro Call Collection (`PreProcessingCollectMacroCalls`)
 
-`PreProcessingColectMacroCalls(source, macroTable)`
+`PreProcessingCollectMacroCalls(source, macroTable)`
 
 - **FR-2.3.1** For each macro in the table, scans the source for invocations of
   the form `<macroName> arg1, arg2, ...`.
@@ -374,6 +391,19 @@ Macro processing has three functions that must be called in order:
 - **FR-2.4.6** The macro invocation line is matched precisely, including the
   arguments, to avoid false replacements.
 
+### FR-2.5: Macro Definition Removal
+
+After macro expansion, the `%macro ... %endmacro` definition blocks must not
+remain in the source. If they are left in, the lexer will encounter unknown
+directives.
+
+- **FR-2.5.1** `PreProcessingReplaceMacroCalls` must remove all
+  `%macro ... %endmacro` blocks from the source after expansion.
+- **FR-2.5.2** The removal must happen after all calls have been expanded, so
+  that the body text is still available during expansion.
+- **FR-2.5.3** If a macro has zero calls, its definition block must still be
+  removed — unused macro definitions must not leak into the lexer.
+
 ---
 
 ## FR-3: Symbols (`PreProcessingCreateSymbolTable`)
@@ -403,6 +433,18 @@ sources: `%define` directives and macro names.
 - **FR-3.3.1** The returned map keys are symbol names; all values are `true`.
 - **FR-3.3.2** If there are no `%define` directives and no macros, the map is
   empty.
+
+### FR-3.4: %define Directive Removal
+
+After the symbol table is built, `%define` lines must not remain in the source.
+If they are left in, the lexer will encounter unknown directives.
+
+- **FR-3.4.1** `%define` directives must be stripped from the source before it
+  reaches the lexer.
+- **FR-3.4.2** The removal may be done by `PreProcessingHandleConditionals`
+  (since it already rewrites the source) or as a separate pass. The
+  requirements do not prescribe which function performs the removal, only that
+  `%define` lines are absent from the final pre-processed output.
 
 ---
 
@@ -466,20 +508,40 @@ and produces a source string with only the active branches retained.
 
 ## FR-5: Error Reporting
 
+### FR-5.1: Current Strategy (panic)
+
 All pre-processing errors are currently reported by panicking with a descriptive
 message. Each panic message must include:
 
-- **FR-5.1** The type of error (e.g. "circular inclusion", "duplicate %define",
+- **FR-5.1.1** The type of error (e.g. "circular inclusion", "duplicate %define",
   "wrong argument count").
-- **FR-5.2** The relevant file path or symbol name.
-- **FR-5.3** The line number in the source where the error was detected.
-- **FR-5.4** For duplicate errors: the line number of the first occurrence.
+- **FR-5.1.2** The relevant file path or symbol name.
+- **FR-5.1.3** The line number in the source where the error was detected.
+- **FR-5.1.4** For duplicate errors: the line number of the first occurrence.
 
-> **Note:** The assembly pipeline (`assemble_file.go`) catches some of these
-> conditions before they reach the panic (e.g. circular inclusion is detected
-> by the caller). Future work should migrate all panics to `debugcontext.Error`
-> recordings so the pipeline can report multiple errors instead of aborting on
-> the first one.
+### FR-5.2: Migration to Recoverable Errors
+
+The pre-processor functions should be migrated from panics to returning errors
+so the orchestrator can collect multiple diagnostics via `debugcontext.Error`
+instead of aborting on the first problem.
+
+- **FR-5.2.1** Functions that return a transformed source should gain an `error`
+  return value:
+  - `PreProcessingHandleIncludes(source) → (string, []PreProcessingInclusion, error)`
+  - `PreProcessingCollectMacroCalls(source, macroTable) → error`
+  - `PreProcessingReplaceMacroCalls(source, macroTable) → (string, error)`
+  - `PreProcessingCreateSymbolTable(source, macroTable) → (map[string]bool, error)`
+  - `PreProcessingHandleConditionals(source, definedSymbols) → (string, error)`
+- **FR-5.2.2** Structural errors (unmatched `%endif`, `%else` without `%ifdef`,
+  `%macro` without `%endmacro`) may remain as panics because they indicate a
+  fundamentally broken source that cannot be partially processed.
+- **FR-5.2.3** Data errors (file not found, wrong argument count, duplicate
+  `%define`, non-`.kasm` include) should return errors so the orchestrator can
+  record them via `debugcontext.Error` and continue collecting further
+  diagnostics.
+- **FR-5.2.4** The orchestrator (`assemble_file.go`) already catches circular
+  inclusion via `debugCtx.Error` before the pre-processor sees it. This
+  pattern should be extended to all data errors once FR-5.2.1 is implemented.
 
 ---
 
@@ -496,4 +558,9 @@ debugging tools can identify where content originated.
   line-origin tracing works across all transformations (FR-0.3).
 - **FR-6.4** `SnapshotWithInclusions` is used after the include phase so that
   expanding lines are annotated with their source file path.
+- **FR-6.5** Traceability comments (`; FILE:`, `; END FILE:`, `; MACRO:`) are
+  assembly-style comments (prefixed with `;`). They must not be interpreted as
+  directives by later phases. This is guaranteed by the fact that all directive
+  regexes match lines starting with `%`, and `;` lines are comments — but the
+  invariant must be maintained if new directive patterns are added.
 

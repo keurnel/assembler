@@ -266,6 +266,100 @@ my_macro 42`
 	}
 }
 
+// --- FR-2.2.6: %macro without %endmacro ---
+
+func TestPreProcessingMacroTable_NoEndmacro_Panics(t *testing.T) {
+	source := `%macro my_macro 1
+    mov rax, %1
+`
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("expected panic for macro without matching endmacro")
+		}
+		msg, ok := r.(string)
+		if !ok {
+			t.Fatal("expected panic message to be a string")
+		}
+		if !containsSubstring(msg, "my_macro") {
+			t.Errorf("expected panic message to contain macro name, got: %s", msg)
+		}
+		if !containsSubstring(msg, "endmacro") {
+			t.Errorf("expected panic message to mention endmacro, got: %s", msg)
+		}
+	}()
+	kasm.PreProcessingMacroTable(source)
+}
+
+// --- FR-2.5: Macro definition removal ---
+
+func TestPreProcessingReplaceMacroCalls_RemovesDefinitionBlock(t *testing.T) {
+	source := `%macro my_macro 1
+    mov rax, %1
+%endmacro
+my_macro 42`
+
+	table := kasm.PreProcessingMacroTable(source)
+	kasm.PreProcessingCollectMacroCalls(source, table)
+	result := kasm.PreProcessingReplaceMacroCalls(source, table)
+
+	if containsSubstring(result, "%macro") {
+		t.Error("expected macro definition to be removed from output")
+	}
+	if containsSubstring(result, "%endmacro") {
+		t.Error("expected endmacro to be removed from output")
+	}
+	if !containsSubstring(result, "mov rax, 42") {
+		t.Error("expected expanded macro call in output")
+	}
+}
+
+func TestPreProcessingReplaceMacroCalls_RemovesUnusedDefinition(t *testing.T) {
+	source := `%macro unused_macro 1
+    mov rax, %1
+%endmacro
+mov rbx, 1`
+
+	table := kasm.PreProcessingMacroTable(source)
+	kasm.PreProcessingCollectMacroCalls(source, table)
+	result := kasm.PreProcessingReplaceMacroCalls(source, table)
+
+	if containsSubstring(result, "%macro") {
+		t.Error("expected unused macro definition to be removed (FR-2.5.3)")
+	}
+	if containsSubstring(result, "%endmacro") {
+		t.Error("expected endmacro to be removed")
+	}
+	if !containsSubstring(result, "mov rbx, 1") {
+		t.Error("expected non-macro code to be preserved")
+	}
+}
+
+func TestPreProcessingReplaceMacroCalls_RemovesMultipleDefinitions(t *testing.T) {
+	source := `%macro mac_a 1
+    mov rax, %1
+%endmacro
+%macro mac_b 1
+    mov rbx, %1
+%endmacro
+mac_a 1
+mac_b 2`
+
+	table := kasm.PreProcessingMacroTable(source)
+	kasm.PreProcessingCollectMacroCalls(source, table)
+	result := kasm.PreProcessingReplaceMacroCalls(source, table)
+
+	if containsSubstring(result, "%macro") {
+		t.Error("expected all macro definitions to be removed")
+	}
+	if !containsSubstring(result, "mov rax, 1") {
+		t.Error("expected mac_a expansion")
+	}
+	if !containsSubstring(result, "mov rbx, 2") {
+		t.Error("expected mac_b expansion")
+	}
+}
+
 // --- helpers ---
 
 func containsSubstring(s, substr string) bool {
