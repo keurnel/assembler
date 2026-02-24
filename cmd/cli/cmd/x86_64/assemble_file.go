@@ -52,7 +52,7 @@ func runAssembleFile(cmd *cobra.Command, args []string) error {
 	source = preProcess(source, tracker)
 
 	// Print history of line transformations for debugging.
-	for i, change := range tracker.History(1) {
+	for i, change := range tracker.History(0) {
 		println("Index:", i, change.String())
 	}
 
