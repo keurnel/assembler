@@ -219,17 +219,14 @@ func (i *Instance) Value() string {
 	return i.value
 }
 
-// Lines - returns the lines from the latest snapshot.
+// Lines - returns the lines from the latest snapshot. There is no nil guard —
+// the latest snapshot is guaranteed to exist (FR-2).
 func (i *Instance) Lines() []string {
-	latest := i.history.latest()
-	if latest == nil {
-		return nil
-	}
-	return latest.lines
+	return i.history.latest().lines
 }
 
-// LatestSnapshot - returns the latest snapshot in the history.
-// Returns nil if history is empty.
+// LatestSnapshot - returns the most recent snapshot in the history. There is no
+// nil return — the latest snapshot is guaranteed to exist (FR-2).
 func (i *Instance) LatestSnapshot() *LinesSnapshot {
 	return i.history.latest()
 }

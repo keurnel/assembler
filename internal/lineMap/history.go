@@ -99,22 +99,10 @@ type History struct {
 	items []LinesSnapshot
 }
 
-// empty - returns true if the history is empty, false otherwise.
-func (h *History) empty() bool {
-	return len(h.items) == 0
-}
-
-// notEmpty - inverse function of `empty()`, returns true if the history is not empty,
-// false otherwise.
-func (h *History) notEmpty() bool {
-	return !h.empty()
-}
-
-// latest - returns the latest snapshot in the history. Returns nil if the history is empty.
+// latest - returns the most recent snapshot in the history. There is no nil
+// return and no empty guard — latest() is only called on a fully constructed
+// Instance (FR-2), which guarantees at least one snapshot exists.
 func (h *History) latest() *LinesSnapshot {
-	if h.empty() {
-		return nil
-	}
 	return &h.items[len(h.items)-1]
 }
 
@@ -161,7 +149,7 @@ func (h *History) LineOrigin(lineNumber int) int {
 func (h *History) snapshotInitial(instance *Instance) {
 	h.items = append(h.items, LinesSnapshot{
 		_type:   LineSnapshotTypeInitial,
-		hash:    h.snapshotHashGenerate(instance.value),
+		hash:    generateSourceHash(instance.value),
 		source:  instance.value,
 		lines:   strings.Split(instance.value, "\n"),
 		changes: nil,
@@ -174,7 +162,7 @@ func (h *History) snapshotInitial(instance *Instance) {
 func (h *History) snapshotNoChange(instance *Instance) {
 	h.items = append(h.items, LinesSnapshot{
 		_type:   LineSnapshotTypeNoChange,
-		hash:    h.snapshotHashGenerate(instance.value),
+		hash:    generateSourceHash(instance.value),
 		source:  instance.value,
 		lines:   strings.Split(instance.value, "\n"),
 		changes: nil,
@@ -188,24 +176,12 @@ func (h *History) snapshotNoChange(instance *Instance) {
 func (h *History) snapshotChange(instance *Instance, changes map[int]LineChange, removals []LineChange) {
 	h.items = append(h.items, LinesSnapshot{
 		_type:    LineSnapshotTypeChange,
-		hash:     h.snapshotHashGenerate(instance.value),
+		hash:     generateSourceHash(instance.value),
 		source:   instance.value,
 		lines:    strings.Split(instance.value, "\n"),
 		changes:  &changes,
 		removals: removals,
 	})
-}
-
-// snapshotHashGenerate - generates a hash for the source of a snapshot. This is used
-// to quickly compare snapshots and determine if they are identical or not.
-func (h *History) snapshotHashGenerate(source string) string {
-	return generateSourceHash(source)
-}
-
-// snapshotHashCompare - compares the hash of a snapshot with the hash of another snapshot. Returns
-// true if the hashes are equal, false otherwise.
-func (h *History) snapshotHashCompare(snapshot1, snapshot2 LinesSnapshot) bool {
-	return snapshot1.hash == snapshot2.hash
 }
 
 // SourceCompare - compares the source of a snapshot with a given value. Returns true if the

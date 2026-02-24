@@ -220,26 +220,50 @@ snapshots, from oldest to newest. Because contracting entries live in the
 
 ### FR-8: Snapshot Hashing
 
-- **FR-8.1** Each snapshot must store a SHA-256 hash of its source content.
-- **FR-8.2** Hash comparison must be used for fast equality checks between snapshots
-  (`SourceCompare`, `snapshotHashCompare`).
+Snapshot hashing enables fast equality checks without comparing full source strings.
+The hash function is a pure, stateless operation — it does not depend on `History`
+or any other struct state.
+
+- **FR-8.1** Each snapshot must store a SHA-256 hash of its source content, computed at
+  snapshot creation time.
+- **FR-8.2** `SourceCompare(value)` on `LinesSnapshot` must compare the snapshot's stored
+  hash against the hash of the provided value, enabling fast equality checks in `Update()`.
+- **FR-8.3** `generateSourceHash(source)` is a package-level function, not a method on
+  `History`. It takes a string and returns its SHA-256 hex digest. It is called directly
+  by the snapshot factory methods and `SourceCompare`.
+- **FR-8.4** There is no `snapshotHashGenerate` wrapper method on `History` — the
+  package-level `generateSourceHash` is called directly.
+- **FR-8.5** There is no `snapshotHashCompare` method. It was never called and is removed.
+  Consumers compare hashes via `SourceCompare` or direct string comparison.
 
 ### FR-9: History Management
 
-- **FR-9.1** The `History` must store an ordered list of `LinesSnapshot` entries.
+`History` is an ordered collection of snapshots. Because an `Instance` is guaranteed
+to have at least one snapshot (FR-2), several defensive helpers are unnecessary.
+
+- **FR-9.1** The `History` must store an ordered slice of `LinesSnapshot` entries.
 - **FR-9.2** Only one `LineSnapshotTypeInitial` snapshot may exist. This is enforced
   structurally by the API (see FR-3.3 / FR-3.4), not by runtime checks.
-- **FR-9.3** `latest()` must return the most recent snapshot, or `nil` if the history is empty.
-- **FR-9.4** `empty()` / `notEmpty()` must accurately report whether the history contains
-  any snapshots.
+- **FR-9.3** `latest()` must return a pointer to the most recent snapshot. There is no
+  nil return and no `empty()` guard — `latest()` is only called on a fully constructed
+  `Instance` (FR-2), which guarantees at least one snapshot exists.
+- **FR-9.4** There is no `empty()` or `notEmpty()` method. These were only used by
+  `latest()` and `LineOrigin()` as defensive guards for a state that is impossible by
+  construction. The `len(h.items)` check is used directly where needed (e.g. `latest()`
+  is guaranteed non-empty, `LineOrigin` skips index 0).
 
 ### FR-10: Accessor Methods
 
+Accessor methods on `Instance` provide read-only access to the current state.
+Because `Instance` is guaranteed to have at least one snapshot (FR-2), accessors
+that depend on snapshot state do not need nil guards.
+
 - **FR-10.1** `Value()` must return the current source string of the instance.
-- **FR-10.2** `Lines()` must return the lines from the latest snapshot, or `nil` if no
-  snapshots exist.
+- **FR-10.2** `Lines()` must return the lines from the latest snapshot. There is no nil
+  guard — the latest snapshot is guaranteed to exist (FR-2).
 - **FR-10.3** `SnapshotCount()` must return the total number of snapshots in the history.
-- **FR-10.4** `LatestSnapshot()` must return a pointer to the most recent snapshot.
+- **FR-10.4** `LatestSnapshot()` must return a pointer to the most recent snapshot. There
+  is no nil return — the latest snapshot is guaranteed to exist (FR-2).
 
 ---
 

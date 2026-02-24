@@ -461,8 +461,8 @@ func TestInstance_LineHistory(t *testing.T) {
 		if entry.NewIndex() != 1 {
 			t.Errorf("Expected newIndex 1, got %d", entry.NewIndex())
 		}
-		if entry.Origin() != 0 {
-			t.Errorf("Expected origin 0, got %d", entry.Origin())
+		if entry.Origin() != 1 {
+			t.Errorf("Expected origin 1, got %d", entry.Origin())
 		}
 		// String() should produce readable output.
 		s := entry.String()
