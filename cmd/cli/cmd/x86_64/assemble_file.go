@@ -144,20 +144,25 @@ func preProcess(source string, tracker *lineMap.Tracker) string {
 }
 
 // preProcessIncludes handles %include directives, detects circular inclusions,
-// and snapshots the result.
+// and snapshots the result with source file annotations.
 func preProcessIncludes(source string, tracker *lineMap.Tracker) string {
 	source, inclusions := kasm.PreProcessingHandleIncludes(source)
 
 	seen := make(map[string]bool, len(inclusions))
+	trackerInclusions := make([]lineMap.Inclusion, 0, len(inclusions))
 	for _, inc := range inclusions {
 		if seen[inc.IncludedFilePath] {
 			panic(fmt.Sprintf("pre-processing error: circular inclusion of '%s' at line %d",
 				inc.IncludedFilePath, inc.LineNumber))
 		}
 		seen[inc.IncludedFilePath] = true
+		trackerInclusions = append(trackerInclusions, lineMap.Inclusion{
+			FilePath:   inc.IncludedFilePath,
+			LineNumber: inc.LineNumber,
+		})
 	}
 
-	tracker.Snapshot(source)
+	tracker.SnapshotWithInclusions(source, trackerInclusions)
 	return source
 }
 

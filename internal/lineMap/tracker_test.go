@@ -102,6 +102,140 @@ func TestTracker_Snapshot(t *testing.T) {
 	})
 }
 
+func TestTracker_SnapshotWithInclusions(t *testing.T) {
+	// ==============================================================
+	//
+	// FR-11.2.3: SnapshotWithInclusions annotates expanding lines
+	// with the source file they were included from.
+	//
+	// ==============================================================
+	t.Run("annotates expanding lines with source file", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "main.kasm")
+		// Original source has a single %include directive placeholder.
+		if err := os.WriteFile(path, []byte("%include \"header.kasm\""), 0644); err != nil {
+			t.Fatalf("Failed to create temp file: %v", err)
+		}
+
+		tracker, _ := Track(path)
+
+		// Simulate what PreProcessingHandleIncludes produces:
+		// the %include is replaced with ; FILE: / content / ; END FILE: markers.
+		expandedSource := "; FILE: header.kasm\nmov rax, 1\nxor rbx, rbx\n; END FILE: header.kasm"
+
+		tracker.SnapshotWithInclusions(expandedSource, []Inclusion{
+			{FilePath: "header.kasm", LineNumber: 1},
+		})
+
+		// Verify the history of an included line (index 1: "mov rax, 1").
+		history := tracker.History(1)
+		if len(history) != 1 {
+			t.Fatalf("Expected 1 history entry, got %d", len(history))
+		}
+
+		entry := history[0]
+		if entry.Type() != "expanding" {
+			t.Errorf("Expected type 'expanding', got '%s'", entry.Type())
+		}
+		if entry.SourceFile() != "header.kasm" {
+			t.Errorf("Expected sourceFile 'header.kasm', got '%s'", entry.SourceFile())
+		}
+		if entry.Content() != "mov rax, 1" {
+			t.Errorf("Expected content 'mov rax, 1', got '%s'", entry.Content())
+		}
+	})
+
+	t.Run("does not annotate lines outside file markers", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "main.kasm")
+		// Original: two lines, first is an include placeholder, second is real code.
+		if err := os.WriteFile(path, []byte("%include \"h.kasm\"\nmov rcx, 0"), 0644); err != nil {
+			t.Fatalf("Failed to create temp file: %v", err)
+		}
+
+		tracker, _ := Track(path)
+
+		// After include expansion, "mov rcx, 0" stays as-is at the end.
+		expandedSource := "; FILE: h.kasm\npush rbp\n; END FILE: h.kasm\nmov rcx, 0"
+
+		tracker.SnapshotWithInclusions(expandedSource, []Inclusion{
+			{FilePath: "h.kasm", LineNumber: 1},
+		})
+
+		// "mov rcx, 0" at index 3 is unchanged (it was in the original).
+		history := tracker.History(3)
+		if len(history) != 1 {
+			t.Fatalf("Expected 1 history entry, got %d", len(history))
+		}
+
+		entry := history[0]
+		// Unchanged line should have empty sourceFile.
+		if entry.SourceFile() != "" {
+			t.Errorf("Expected empty sourceFile for unchanged line, got '%s'", entry.SourceFile())
+		}
+	})
+
+	t.Run("FILE marker lines are annotated with the included file", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "main.kasm")
+		if err := os.WriteFile(path, []byte("original_line"), 0644); err != nil {
+			t.Fatalf("Failed to create temp file: %v", err)
+		}
+
+		tracker, _ := Track(path)
+
+		expandedSource := "; FILE: lib.kasm\nadd rax, rbx\n; END FILE: lib.kasm"
+
+		tracker.SnapshotWithInclusions(expandedSource, []Inclusion{
+			{FilePath: "lib.kasm", LineNumber: 1},
+		})
+
+		// Index 0: "; FILE: lib.kasm" — expanding, annotated.
+		snapshot := tracker.instance.LatestSnapshot()
+		change0 := (*snapshot.changes)[0]
+		if change0.SourceFile() != "lib.kasm" {
+			t.Errorf("Expected '; FILE:' marker annotated with 'lib.kasm', got '%s'", change0.SourceFile())
+		}
+
+		// Index 2: "; END FILE: lib.kasm" — expanding, annotated.
+		change2 := (*snapshot.changes)[2]
+		if change2.SourceFile() != "lib.kasm" {
+			t.Errorf("Expected '; END FILE:' marker annotated with 'lib.kasm', got '%s'", change2.SourceFile())
+		}
+	})
+
+	t.Run("multiple included files are annotated correctly", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "main.kasm")
+		if err := os.WriteFile(path, []byte("%include \"a.kasm\"\n%include \"b.kasm\""), 0644); err != nil {
+			t.Fatalf("Failed to create temp file: %v", err)
+		}
+
+		tracker, _ := Track(path)
+
+		expandedSource := "; FILE: a.kasm\nline_a\n; END FILE: a.kasm\n; FILE: b.kasm\nline_b\n; END FILE: b.kasm"
+
+		tracker.SnapshotWithInclusions(expandedSource, []Inclusion{
+			{FilePath: "a.kasm", LineNumber: 1},
+			{FilePath: "b.kasm", LineNumber: 2},
+		})
+
+		snapshot := tracker.instance.LatestSnapshot()
+
+		// line_a at index 1 should be from a.kasm.
+		changeA := (*snapshot.changes)[1]
+		if changeA.SourceFile() != "a.kasm" {
+			t.Errorf("Expected sourceFile 'a.kasm', got '%s'", changeA.SourceFile())
+		}
+
+		// line_b at index 4 should be from b.kasm.
+		changeB := (*snapshot.changes)[4]
+		if changeB.SourceFile() != "b.kasm" {
+			t.Errorf("Expected sourceFile 'b.kasm', got '%s'", changeB.SourceFile())
+		}
+	})
+}
+
 func TestTracker_Origin(t *testing.T) {
 	// ==============================================================
 	//

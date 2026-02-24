@@ -13,10 +13,11 @@ const (
 )
 
 type LineChange struct {
-	_type    string // "expanding", "contracting", or "unchanged" — set by factory, never by callers.
-	origin   int    // 0-based line index in the previous (old) version.
-	newIndex int    // 0-based line index in the new version. -1 for contracting (line no longer exists).
-	content  string // The actual text of the line.
+	_type      string // "expanding", "contracting", or "unchanged" — set by factory, never by callers.
+	origin     int    // 0-based line index in the previous (old) version.
+	newIndex   int    // 0-based line index in the new version. -1 for contracting (line no longer exists).
+	content    string // The actual text of the line.
+	sourceFile string // File path the line originated from (set on expanding from %include, empty otherwise).
 }
 
 // --- Accessor methods (FR-5.5) ---
@@ -33,6 +34,10 @@ func (lc LineChange) NewIndex() int { return lc.newIndex }
 
 // Content returns the actual text of the line.
 func (lc LineChange) Content() string { return lc.content }
+
+// SourceFile returns the file path the line originated from.
+// Empty string if the line is from the main source file or is not an expanding change.
+func (lc LineChange) SourceFile() string { return lc.sourceFile }
 
 // --- Factory functions (FR-5.2) ---
 
@@ -75,6 +80,10 @@ func newContractingChange(origin int, content string) LineChange {
 func (lc LineChange) String() string {
 	switch lc._type {
 	case "expanding":
+		if lc.sourceFile != "" {
+			return fmt.Sprintf("LineChange{Type: %s, Origin: %d, NewIndex: %d, Content: %q, SourceFile: %q}",
+				lc._type, lc.origin, lc.newIndex, lc.content, lc.sourceFile)
+		}
 		return fmt.Sprintf("LineChange{Type: %s, Origin: %d, NewIndex: %d, Content: %q}",
 			lc._type, lc.origin, lc.newIndex, lc.content)
 	case "contracting":

@@ -1,5 +1,7 @@
 package lineMap
 
+import "strings"
+
 // Tracker provides a simplified, high-level API for the most common lineMap
 // workflow: load a source file, track it through pre-processing transformations,
 // and trace lines back to their origin.
@@ -9,6 +11,13 @@ package lineMap
 type Tracker struct {
 	instance *Instance
 	source   Source
+}
+
+// Inclusion represents a single %include directive, carrying the file path
+// and the line number where it appeared in the original source.
+type Inclusion struct {
+	FilePath   string
+	LineNumber int
 }
 
 // Track is the single entry point for the facade. It validates and reads the
@@ -37,6 +46,66 @@ func Track(path string) (*Tracker, error) {
 // It is infallible — it delegates to Instance.Update which is infallible (FR-4.1).
 func (t *Tracker) Snapshot(source string) {
 	t.instance.Update(source)
+}
+
+// SnapshotWithInclusions records a new version of the source after handling
+// %include directives. After snapshotting, it annotates expanding entries in
+// the latest snapshot's changes map with the sourceFile they belong to, derived
+// from the ; FILE: <path> / ; END FILE: <path> comment markers.
+func (t *Tracker) SnapshotWithInclusions(source string, inclusions []Inclusion) {
+	t.instance.Update(source)
+
+	snapshot := t.instance.LatestSnapshot()
+	if snapshot.changes == nil {
+		return
+	}
+
+	// Build a line-index → sourceFile mapping by scanning the new source
+	// for ; FILE: / ; END FILE: markers.
+	lines := strings.Split(source, "\n")
+	fileMap := buildSourceFileMap(lines)
+
+	// Annotate expanding entries with their source file.
+	changes := *snapshot.changes
+	for idx, change := range changes {
+		if change._type != "expanding" {
+			continue
+		}
+		if file, ok := fileMap[idx]; ok {
+			change.sourceFile = file
+			changes[idx] = change
+		}
+	}
+}
+
+// buildSourceFileMap scans lines for ; FILE: <path> / ; END FILE: <path>
+// markers and returns a map from line index to the source file path for
+// lines that fall within an included file block.
+func buildSourceFileMap(lines []string) map[int]string {
+	fileMap := make(map[int]string)
+	var currentFile string
+
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		if strings.HasPrefix(trimmed, "; FILE: ") {
+			currentFile = strings.TrimPrefix(trimmed, "; FILE: ")
+			fileMap[i] = currentFile
+			continue
+		}
+
+		if strings.HasPrefix(trimmed, "; END FILE: ") {
+			fileMap[i] = currentFile
+			currentFile = ""
+			continue
+		}
+
+		if currentFile != "" {
+			fileMap[i] = currentFile
+		}
+	}
+
+	return fileMap
 }
 
 // --- Tracing (FR-11.3) ---

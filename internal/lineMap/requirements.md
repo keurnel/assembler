@@ -148,6 +148,11 @@ detailed diff report without needing to look up the snapshot source:
 - **FR-5.4.4** `content` — the actual text of the line. For `unchanged` and `expanding`
   this is the line in the new version. For `contracting` this is the line that was
   removed.
+- **FR-5.4.5** `sourceFile` — the file path that a line originated from. Set on
+  `expanding` changes when the line was inserted from an included file (e.g. via
+  `%include`). Empty string for lines that originate from the main source file or for
+  `unchanged` and `contracting` changes. This enables consumers to see which included
+  file contributed each inserted line.
 
 #### FR-5.5: Accessor Methods
 
@@ -159,6 +164,9 @@ internal fields directly:
 - **FR-5.5.3** `NewIndex() int` — returns the new line index (`-1` for contracting).
 - **FR-5.5.4** `Content() string` — returns the line content.
 - **FR-5.5.5** `String() string` — returns a human-readable representation for debugging.
+- **FR-5.5.6** `SourceFile() string` — returns the file path that the line originated
+  from. Empty string if the line is from the main source file or is not an expanding
+  change.
 
 #### FR-5.6: Change Map Keying
 
@@ -289,6 +297,18 @@ for callers.
   pre-processing step. It delegates to `Instance.Update(source)`.
 - **FR-11.2.2** `Snapshot` is infallible — it delegates to `Update` which is infallible
   (FR-4.1).
+- **FR-11.2.3** `SnapshotWithInclusions(source, inclusions)` records a new version of
+  the source after handling `%include` directives. After calling `Instance.Update(source)`,
+  it walks the expanding entries in the latest snapshot's changes map and annotates each
+  one with the `sourceFile` of the included file it belongs to.
+  - The `inclusions` parameter is a list of `Inclusion` structs, each carrying
+    `FilePath` and `LineNumber`.
+  - The annotation is derived from the `; FILE: <path>` / `; END FILE: <path>` comment
+    markers that `PreProcessingHandleIncludes` wraps around each included file's content.
+    Lines between a `; FILE:` and its corresponding `; END FILE:` marker are annotated
+    with that file path.
+  - Lines outside any `; FILE:` / `; END FILE:` block (i.e. from the main source) are
+    not annotated (their `sourceFile` remains empty).
 
 #### FR-11.3: Tracing
 
