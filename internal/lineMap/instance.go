@@ -116,7 +116,15 @@ func (i *Instance) changes(newValue string) (map[int]LineChange, error) {
 
 	lastSnapshot := i.history.items[len(i.history.items)-1]
 
-	println(lastSnapshot._type)
+	changes := make(map[int]LineChange)
+	currentValue := lastSnapshot.source
 
-	return make(map[int]LineChange), nil
+	// Compute changes between the current value and the new value.
+	//
+	currentLines := strings.Split(currentValue, "\n")
+	newLines := strings.Split(newValue, "\n")
+
+	println(len(currentLines), len(newLines))
+
+	return changes, nil
 }
