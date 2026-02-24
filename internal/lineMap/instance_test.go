@@ -320,6 +320,11 @@ func TestInstance_Update(t *testing.T) {
 		if len(snapshot.lines) != 2 {
 			t.Errorf("Expected 2 lines after contraction, got %d", len(snapshot.lines))
 		}
+
+		changes := snapshot.changes
+		for index, change := range *changes {
+			println("Change at index", index, change._type, ":", change.origin, change.contractingRangeStart, change.contractingRangeEnd)
+		}
 	})
 	// ==============================================================
 	//

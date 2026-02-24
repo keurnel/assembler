@@ -185,50 +185,73 @@ func (i *Instance) changes(newValue string) (map[int]LineChange, error) {
 		changes[ni] = *change
 		ni++
 	}
-
+	
 	return changes, nil
 }
 
-// computeLCS - computes the longest common subsequence of two string slices using
-// dynamic programming. Returns the common lines in order.
+// computeLCS - computes the longest common subsequence (LCS) of two string slices
+// using dynamic programming.
+//
+// The LCS is the longest sequence of lines that appear in the same order in both
+// slices, but not necessarily contiguously. This is used to determine which lines
+// are unchanged between two versions of source code.
+//
+// Time complexity:  O(m × n) where m = len(a), n = len(b)
+// Space complexity: O(m × n) for the DP table
+//
+// Example:
+//
+//	a = ["foo", "bar", "baz"]
+//	b = ["foo", "qux", "baz"]
+//	→ LCS = ["foo", "baz"]
 func computeLCS(a, b []string) []string {
 	m, n := len(a), len(b)
 	if m == 0 || n == 0 {
 		return nil
 	}
 
-	// Build LCS length table.
+	// Build a (m+1) × (n+1) DP table where dp[i][j] represents the length
+	// of the LCS for the first i elements of `a` and the first j elements of `b`.
 	dp := make([][]int, m+1)
 	for i := range dp {
 		dp[i] = make([]int, n+1)
 	}
 
+	// Fill the DP table bottom-up.
+	// Row 0 and column 0 remain 0 (base case: empty subsequence).
 	for i := 1; i <= m; i++ {
 		for j := 1; j <= n; j++ {
 			if a[i-1] == b[j-1] {
+				// Lines match — extend the LCS by 1.
 				dp[i][j] = dp[i-1][j-1] + 1
 			} else if dp[i-1][j] >= dp[i][j-1] {
+				// Best LCS comes from skipping the current line in `a`.
 				dp[i][j] = dp[i-1][j]
 			} else {
+				// Best LCS comes from skipping the current line in `b`.
 				dp[i][j] = dp[i][j-1]
 			}
 		}
 	}
 
-	// Backtrack to find the actual LCS.
+	// Backtrack through the DP table from dp[m][n] to reconstruct
+	// the actual LCS lines in order.
 	lcsLen := dp[m][n]
 	result := make([]string, lcsLen)
 	i, j := m, n
-	idx := lcsLen - 1
+	idx := lcsLen - 1 // Fill result slice from the end.
 	for i > 0 && j > 0 {
 		if a[i-1] == b[j-1] {
+			// Both lines match — this line is part of the LCS.
 			result[idx] = a[i-1]
 			idx--
 			i--
 			j--
 		} else if dp[i-1][j] >= dp[i][j-1] {
+			// Move up in the table (skip line in `a`).
 			i--
 		} else {
+			// Move left in the table (skip line in `b`).
 			j--
 		}
 	}
