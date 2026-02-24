@@ -1,13 +1,11 @@
 package x86_64
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sync"
-	"time"
 
+	"github.com/keurnel/assembler/internal/debugcontext"
 	"github.com/keurnel/assembler/internal/lineMap"
 	"github.com/keurnel/assembler/v0/architecture"
 	"github.com/keurnel/assembler/v0/architecture/x86/_64"
@@ -42,14 +40,23 @@ func runAssembleFile(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	runDebugInformationDemo(source)
+	// Create the debug context for this assembly invocation (FR-9.1).
+	debugCtx := debugcontext.NewDebugContext(fullPath)
 
 	tracker, err := lineMap.Track(fullPath)
 	if err != nil {
 		return fmt.Errorf("failed to initialise line tracker: %w", err)
 	}
 
-	source = preProcess(source, tracker)
+	source = preProcess(source, tracker, debugCtx)
+
+	// Abort if pre-processing recorded any errors (FR-9.5).
+	if debugCtx.HasErrors() {
+		for _, e := range debugCtx.Errors() {
+			cmd.PrintErrln(e.String())
+		}
+		return fmt.Errorf("assembly aborted: %d error(s) during pre-processing", len(debugCtx.Errors()))
+	}
 
 	_ = source
 	return nil
@@ -96,59 +103,40 @@ func loadArchitectureInstructions() map[string]architecture.InstructionGroup {
 	return groups
 }
 
-// runDebugInformationDemo runs the temporary debug information listener demo.
-// TODO: remove or integrate properly once the debug pipeline is finalised.
-func runDebugInformationDemo(source string) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	var wg sync.WaitGroup
-
-	debugInfo := kasm.SourceDebugInformationMake(source)
-	if err := debugInfo.CanListen(); err != nil {
-		println("Warning: debug listener unavailable:", err.Error())
-		return
-	}
-
-	wg.Add(1)
-	go debugInfo.Listen(ctx, &wg)
-
-	debugInfo.ExpandLine(20, []int{21, 22, 23})
-	println(debugInfo.LineNumberToOrigin(23))
-
-	debugInfo.ExpansionChannel <- kasm.ExpansionEvent{
-		LineNumber:         30,
-		ExpandedLinesCount: 3,
-	}
-
-	go func() {
-		time.Sleep(1 * time.Second)
-		cancel()
-	}()
-
-	wg.Wait()
-}
-
 // preProcess runs the three pre-processing phases (includes, macros,
 // conditionals) and snapshots each transformation in the tracker.
-func preProcess(source string, tracker *lineMap.Tracker) string {
-	source = preProcessIncludes(source, tracker)
-	source = preProcessMacros(source, tracker)
-	source = preProcessConditionals(source, tracker)
+// Each phase sets its debug context phase and records errors instead of panicking.
+func preProcess(source string, tracker *lineMap.Tracker, debugCtx *debugcontext.DebugContext) string {
+	source = preProcessIncludes(source, tracker, debugCtx)
+	if debugCtx.HasErrors() {
+		return source
+	}
+
+	source = preProcessMacros(source, tracker, debugCtx)
+	if debugCtx.HasErrors() {
+		return source
+	}
+
+	source = preProcessConditionals(source, tracker, debugCtx)
 	return source
 }
 
 // preProcessIncludes handles %include directives, detects circular inclusions,
 // and snapshots the result with source file annotations.
-func preProcessIncludes(source string, tracker *lineMap.Tracker) string {
+func preProcessIncludes(source string, tracker *lineMap.Tracker, debugCtx *debugcontext.DebugContext) string {
+	debugCtx.SetPhase("pre-processing/includes")
+
 	source, inclusions := kasm.PreProcessingHandleIncludes(source)
 
 	seen := make(map[string]bool, len(inclusions))
 	trackerInclusions := make([]lineMap.Inclusion, 0, len(inclusions))
 	for _, inc := range inclusions {
 		if seen[inc.IncludedFilePath] {
-			panic(fmt.Sprintf("pre-processing error: circular inclusion of '%s' at line %d",
-				inc.IncludedFilePath, inc.LineNumber))
+			debugCtx.Error(
+				debugCtx.Loc(inc.LineNumber, 0),
+				fmt.Sprintf("circular inclusion of '%s'", inc.IncludedFilePath),
+			)
+			return source
 		}
 		seen[inc.IncludedFilePath] = true
 		trackerInclusions = append(trackerInclusions, lineMap.Inclusion{
@@ -158,27 +146,34 @@ func preProcessIncludes(source string, tracker *lineMap.Tracker) string {
 	}
 
 	tracker.SnapshotWithInclusions(source, trackerInclusions)
+	debugCtx.Trace(debugCtx.Loc(0, 0), fmt.Sprintf("included %d file(s)", len(inclusions)))
 	return source
 }
 
 // preProcessMacros builds the macro table, collects calls, expands them,
 // and snapshots the result.
-func preProcessMacros(source string, tracker *lineMap.Tracker) string {
+func preProcessMacros(source string, tracker *lineMap.Tracker, debugCtx *debugcontext.DebugContext) string {
+	debugCtx.SetPhase("pre-processing/macros")
+
 	macros := kasm.PreProcessingMacroTable(source)
 	kasm.PreProcessingColectMacroCalls(source, macros)
 	source = kasm.PreProcessingReplaceMacroCalls(source, macros)
 
 	tracker.Snapshot(source)
+	debugCtx.Trace(debugCtx.Loc(0, 0), fmt.Sprintf("expanded %d macro(s)", len(macros)))
 	return source
 }
 
 // preProcessConditionals evaluates %ifdef / %ifndef / %else / %endif blocks,
 // and snapshots the result.
-func preProcessConditionals(source string, tracker *lineMap.Tracker) string {
+func preProcessConditionals(source string, tracker *lineMap.Tracker, debugCtx *debugcontext.DebugContext) string {
+	debugCtx.SetPhase("pre-processing/conditionals")
+
 	macros := kasm.PreProcessingMacroTable(source)
 	symbolTable := kasm.PreProcessingCreateSymbolTable(source, macros)
 	source = kasm.PreProcessingHandleConditionals(source, symbolTable)
 
 	tracker.Snapshot(source)
+	debugCtx.Trace(debugCtx.Loc(0, 0), fmt.Sprintf("evaluated conditionals with %d symbol(s)", len(symbolTable)))
 	return source
 }
