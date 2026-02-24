@@ -157,7 +157,7 @@ func preProcessMacros(source string, tracker *lineMap.Tracker, debugCtx *debugco
 	debugCtx.SetPhase("pre-processing/macros")
 
 	macros := kasm.PreProcessingMacroTable(source)
-	kasm.PreProcessingColectMacroCalls(source, macros)
+	kasm.PreProcessingCollectMacroCalls(source, macros)
 	source = kasm.PreProcessingReplaceMacroCalls(source, macros)
 
 	tracker.Snapshot(source)

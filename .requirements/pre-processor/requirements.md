@@ -48,6 +48,164 @@ raw source
 
 ---
 
+## Architecture
+
+### AR-1: File Layout
+
+The pre-processor is a single Go package (`v0/kasm`) with one file per concern:
+
+| File | Responsibility |
+|---|---|
+| `pre_processing_types.go` | Shared types used across phases (`Macro`, `MacroCall`, `MacroParameter`, `PreProcessingInclusion`, `conditionalBlock`, `stackEntry`). |
+| `pre_processing_includes.go` | Phase 1 — `%include` directive handling. |
+| `pre_processing_macros.go` | Phase 2 — `%macro` / `%endmacro` definition, call collection, and expansion. |
+| `pre_processing_symbols.go` | Symbol table construction from `%define` directives and macro names. |
+| `pre_processing_conditionals.go` | Phase 3 — `%ifdef` / `%ifndef` / `%else` / `%endif` evaluation. |
+
+- **AR-1.1** Each phase is isolated in its own file. A phase file must not
+  import or call functions from another phase file directly.
+- **AR-1.2** Shared types live in `pre_processing_types.go`. If a type is used by
+  more than one phase, it must be defined here — not in the phase file that
+  first needed it.
+- **AR-1.3** A pre-compiled regex must live in the file that logically owns the
+  pattern — the file whose public function is the primary consumer of that
+  regex. Other files in the same package may reference it, but ownership is
+  determined by primary usage, not by which file happened to define it first.
+
+### AR-2: Package Boundary
+
+- **AR-2.1** The pre-processor package is `v0/kasm`. All public pre-processing
+  functions and types are exported from this package.
+- **AR-2.2** The pre-processor must not import the orchestrator
+  (`cmd/cli/cmd/x86_64`), the debug context (`internal/debugcontext`), or the
+  line map (`internal/lineMap`). These are orchestration concerns — the
+  pre-processor is a pure transformation layer.
+- **AR-2.3** The only standard library I/O the pre-processor may perform is
+  `os.ReadFile` in `PreProcessingHandleIncludes` (to read included files).
+  All other functions are pure: `string in → string out`.
+- **AR-2.4** The orchestrator (`assemble_file.go`) is responsible for wiring the
+  pre-processor to the debug context, the line map tracker, and the file system.
+
+### AR-3: Function Signatures
+
+Every public pre-processing function follows one of two signatures:
+
+1. **Pure transform:** `func(source string, ...) string`
+   — Takes a source string (and optionally a table), returns a transformed source string.
+
+2. **Extract + transform:** `func(source string, ...) (string, []T)`
+   — Returns the transformed source and a list of extracted metadata for the caller.
+
+- **AR-3.1** Functions must not accept or return pointers to the source string.
+  Strings are immutable in Go; each phase produces a new string.
+- **AR-3.2** Functions that mutate a table in place (e.g.
+  `PreProcessingCollectMacroCalls`) must document this clearly in the function
+  comment. The comment must state that the map is mutated in place. The function
+  name should use the verb "Collect" (not "Colect").
+- **AR-3.3** Functions must not accept a `DebugContext`, a `Tracker`, or any
+  other orchestration dependency. Error reporting is done via `panic` (see
+  FR-5); the orchestrator decides how to surface those panics to the user.
+
+### AR-4: Data Flow
+
+```
+                    source string
+                         │
+  ┌──────────────────────┼──────────────────────┐
+  │ Phase 1              ▼                      │
+  │  PreProcessingHandleIncludes(source)        │
+  │       → source', []PreProcessingInclusion   │
+  └──────────────────────┬──────────────────────┘
+                         │ source'
+  ┌──────────────────────┼──────────────────────┐
+  │ Phase 2              ▼                      │
+  │  PreProcessingMacroTable(source')           │
+  │       → macroTable                          │
+  │  PreProcessingCollectMacroCalls(source',    │
+  │       macroTable)  [mutates macroTable]     │
+  │  PreProcessingReplaceMacroCalls(source',    │
+  │       macroTable) → source''                │
+  └──────────────────────┬──────────────────────┘
+                         │ source''
+  ┌──────────────────────┼──────────────────────┐
+  │ Phase 3              ▼                      │
+  │  PreProcessingMacroTable(source'')          │
+  │       → macroTable'                         │
+  │  PreProcessingCreateSymbolTable(source'',   │
+  │       macroTable') → symbolTable            │
+  │  PreProcessingHandleConditionals(source'',  │
+  │       symbolTable) → source'''              │
+  └──────────────────────┬──────────────────────┘
+                         │ source'''
+                         ▼
+                    lexer input
+```
+
+- **AR-4.1** The source string is the sole carrier of content between phases.
+  No side-channel state (global variables, files, channels) may be used to pass
+  data between phases.
+- **AR-4.2** The macro table is rebuilt from scratch in Phase 3 (from
+  `source''`) to capture any macros that were introduced by Phase 1 includes.
+  It is not carried forward from Phase 2.
+- **AR-4.3** The symbol table is built once per Phase 3 invocation. It combines
+  `%define` directives from the current source and macro names from the
+  freshly-built macro table.
+
+### AR-5: Internal Types vs. Exported Types
+
+- **AR-5.1** Types that appear in public function signatures must be exported
+  (capitalised): `Macro`, `MacroCall`, `MacroParameter`, `PreProcessingInclusion`.
+- **AR-5.2** Types that are implementation details of a single phase must be
+  unexported (lowercase): `conditionalBlock`, `stackEntry`.
+- **AR-5.3** Helper functions that are only used within a single file must be
+  unexported: `trimSpaceBounds`, `precomputeLineNumbers`, `sortBlocksByStart`,
+  `splitIntoLines`.
+
+### AR-6: Shared State & Regex Compilation
+
+- **AR-6.1** Package-level `var` declarations are reserved for pre-compiled
+  `*regexp.Regexp` values. These are safe for concurrent use and avoid repeated
+  compilation at call time.
+- **AR-6.2** No mutable package-level state may exist beyond pre-compiled
+  regexes. Each function call must be self-contained: allocate locally, return
+  results, discard temporaries.
+- **AR-6.3** Regexes that are used in every invocation of a public function
+  must be pre-compiled as package-level `var` declarations (via
+  `regexp.MustCompile`). A regex must not be compiled inside a loop body or
+  on every function call via `regexp.MatchString` / `regexp.Compile`.
+- **AR-6.4** Regexes that depend on runtime values (e.g. a macro name) must be
+  compiled once per value, outside the innermost loop when possible.
+
+### AR-7: Naming Conventions
+
+- **AR-7.1** All public pre-processing functions are prefixed with
+  `PreProcessing` to form a cohesive namespace within the `kasm` package.
+- **AR-7.2** Phase-specific helpers (unexported) do not carry the `PreProcessing`
+  prefix — their file-level location provides sufficient context.
+- **AR-7.3** Test files mirror source files: `pre_processing_includes_test.go`
+  tests `pre_processing_includes.go`, etc. Tests live in the `kasm_test` package
+  (external test package) to test only the exported API.
+- **AR-7.4** Every exported function must have a doc comment that starts with
+  the function name, per Go convention (e.g.
+  `// PreProcessingHandleConditionals evaluates ...`).
+- **AR-7.5** Every unexported helper must have a doc comment explaining its
+  purpose and any non-obvious behaviour.
+
+### AR-8: Early-Exit / Fast-Path
+
+Each phase function should return the source unchanged as early as possible
+when there is nothing to process. This avoids unnecessary regex compilation,
+allocation, and string copying.
+
+- **AR-8.1** If the source is empty, it must be returned immediately.
+- **AR-8.2** If the source does not contain the phase's directive keyword(s)
+  (e.g. `%include`, `%macro`, `%ifdef`), it must be returned immediately
+  without compiling any regex or allocating any intermediate structures.
+- **AR-8.3** Early-exit checks must use `strings.Contains` (not regex) for
+  the cheapest possible scan.
+
+---
+
 ## Types
 
 ### PreProcessingInclusion

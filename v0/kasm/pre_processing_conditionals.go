@@ -2,9 +2,16 @@ package kasm
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
+// Pre-compiled regex for conditional directives: %ifdef, %ifndef, %else, %endif (AR-6.1).
+var conditionalDirectiveRegex = regexp.MustCompile(`(?m)^\s*%(ifdef|ifndef|else|endif)\s*(\w*)\s*$`)
+
+// PreProcessingHandleConditionals evaluates conditional assembly blocks
+// (%ifdef, %ifndef, %else, %endif) and produces a source string with only
+// the active branches retained. Directive lines are removed from the output.
 func PreProcessingHandleConditionals(source string, definedSymbols map[string]bool) string {
 
 	// When the source is empty, there is nothing
@@ -188,6 +195,9 @@ func precomputeLineNumbers(source string, matches [][]int) []int {
 	return result
 }
 
+// sortBlocksByStart sorts conditional blocks by their ifStart offset using
+// insertion sort. The number of blocks is typically small (< 20), making
+// insertion sort efficient and allocation-free.
 func sortBlocksByStart(blocks []conditionalBlock) {
 	for i := 1; i < len(blocks); i++ {
 		key := blocks[i]

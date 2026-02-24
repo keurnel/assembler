@@ -6,27 +6,29 @@ import (
 	"strings"
 )
 
-// PreProcessingHasMacros - checks if the given source code contains any macros. Returns
-// `true` if macros are found, otherwise `false`.
+// Pre-compiled regexes for macro processing (AR-6.3).
+var (
+	// macroDetectRegex checks if any %macro directive exists in the source.
+	macroDetectRegex = regexp.MustCompile(`%macro\s+\w+\s*\d*`)
+	// macroDefRegex matches a %macro definition line and captures name + param count.
+	macroDefRegex = regexp.MustCompile(`(?m)^\s*%macro\s+(\w+)\s*(\d*)\s*$`)
+)
+
+// PreProcessingHasMacros returns true if the source contains at least one
+// %macro directive, false otherwise. Used as an early-exit check.
 func PreProcessingHasMacros(source string) bool {
-	matched, err := regexp.MatchString(`%macro\s+\w+\s*\d*`, source)
-	if err != nil {
-		return false
-	}
-	return matched
+	return macroDetectRegex.MatchString(source)
 }
 
-// PreProcessingMacroTable - extracts macro definitions from the source code and returns a map of
-// macro structs indexed by their names.
+// PreProcessingMacroTable extracts macro definitions from the source code and
+// returns a map of Macro structs indexed by their names. Returns an empty map
+// if no macros are found.
 func PreProcessingMacroTable(source string) map[string]Macro {
 	macroTable := make(map[string]Macro)
 	if !PreProcessingHasMacros(source) {
 		return macroTable
 	}
 
-	// Find all lines that define macros using a regular expression
-	//
-	macroDefRegex := regexp.MustCompile(`(?m)^\s*%macro\s+(\w+)\s*(\d*)\s*$`)
 	matches := macroDefRegex.FindAllStringSubmatch(source, -1)
 
 	for _, match := range matches {
@@ -37,7 +39,7 @@ func PreProcessingMacroTable(source string) map[string]Macro {
 			paramCount = int(match[2][0] - '0') // Convert the parameter count from string to integer
 		}
 
-		// Extract the body of the macro
+		// Per-value regex: depends on the macro name, compiled once per macro (AR-6.4).
 		bodyRegex := regexp.MustCompile(`(?s)%macro\s+` + regexp.QuoteMeta(macroName) + `\s*\d*\s*(.*?)%endmacro`)
 		bodyMatch := bodyRegex.FindStringSubmatch(source)
 		macroBody := ""
@@ -66,11 +68,12 @@ func PreProcessingMacroTable(source string) map[string]Macro {
 	return macroTable
 }
 
-// PreProcessingColectMacroCalls - collects macro calls from the source code and updates the provided macro table with the calls.
-func PreProcessingColectMacroCalls(source string, macroTable map[string]Macro) {
+// PreProcessingCollectMacroCalls scans the source for invocations of each macro
+// in the provided table and appends found calls to Macro.Calls.
+// This function mutates macroTable in place — the caller's map is updated directly.
+func PreProcessingCollectMacroCalls(source string, macroTable map[string]Macro) {
 	for macroName, macro := range macroTable {
-		// Build a regex pattern that matches: macroName arg1, arg2, ...
-		// e.g. "een_macro 1, 2" or "een_macro rax, rbx"
+		// Per-value regex: depends on the macro name, compiled once per macro (AR-6.4).
 		pattern := `(?m)^[^\S\n]*` + regexp.QuoteMeta(macroName) + `\s+(.+)$`
 		re := regexp.MustCompile(pattern)
 
@@ -119,7 +122,10 @@ func PreProcessingColectMacroCalls(source string, macroTable map[string]Macro) {
 	}
 }
 
-// PreProcessingReplaceMacroCalls - replaces macro calls in the source code with their expanded bodies based on the provided macro table.
+// PreProcessingReplaceMacroCalls replaces macro invocations in the source code
+// with their expanded bodies based on the provided macro table. Placeholders
+// (%1, %2, …) are substituted with the call's arguments. Returns the
+// transformed source string.
 func PreProcessingReplaceMacroCalls(source string, macroTable map[string]Macro) string {
 	for _, macro := range macroTable {
 		for _, call := range macro.Calls {
@@ -145,7 +151,7 @@ func PreProcessingReplaceMacroCalls(source string, macroTable map[string]Macro) 
 			// Prepend a comment indicating the macro name, surrounded by blank lines
 			expandedBody = fmt.Sprintf("\n; MACRO: %s\n%s\n", call.Name, expandedBody)
 
-			// Replace the macro call in the source code with the expanded body
+			// Per-value regex: depends on call name + arguments, compiled once per call (AR-6.4).
 			callPattern := `(?m)^[^\S\n]*` + regexp.QuoteMeta(call.Name) + `[^\S\n]+` + regexp.QuoteMeta(strings.Join(call.Arguments, ", ")) + `[^\S\n]*$`
 			source = regexp.MustCompile(callPattern).ReplaceAllString(source, expandedBody)
 		}

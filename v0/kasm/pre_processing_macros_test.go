@@ -130,9 +130,9 @@ func TestPreProcessingMacroTable_ParameterNaming(t *testing.T) {
 	}
 }
 
-// --- PreProcessingColectMacroCalls ---
+// --- PreProcessingCollectMacroCalls ---
 
-func TestPreProcessingColectMacroCalls_SingleCall(t *testing.T) {
+func TestPreProcessingCollectMacroCalls_SingleCall(t *testing.T) {
 	source := `%macro my_macro 2
     mov rax, %1
     mov rdi, %2
@@ -140,7 +140,7 @@ func TestPreProcessingColectMacroCalls_SingleCall(t *testing.T) {
 my_macro 1, 2`
 
 	table := kasm.PreProcessingMacroTable(source)
-	kasm.PreProcessingColectMacroCalls(source, table)
+	kasm.PreProcessingCollectMacroCalls(source, table)
 
 	macro := table["my_macro"]
 	if len(macro.Calls) != 1 {
@@ -159,7 +159,7 @@ my_macro 1, 2`
 	}
 }
 
-func TestPreProcessingColectMacroCalls_MultipleCalls(t *testing.T) {
+func TestPreProcessingCollectMacroCalls_MultipleCalls(t *testing.T) {
 	source := `%macro my_macro 2
     mov rax, %1
     mov rdi, %2
@@ -168,7 +168,7 @@ my_macro 1, 2
 my_macro 3, 4`
 
 	table := kasm.PreProcessingMacroTable(source)
-	kasm.PreProcessingColectMacroCalls(source, table)
+	kasm.PreProcessingCollectMacroCalls(source, table)
 
 	macro := table["my_macro"]
 	if len(macro.Calls) != 2 {
@@ -176,7 +176,7 @@ my_macro 3, 4`
 	}
 }
 
-func TestPreProcessingColectMacroCalls_WrongArgCount_Panics(t *testing.T) {
+func TestPreProcessingCollectMacroCalls_WrongArgCount_Panics(t *testing.T) {
 	source := `%macro my_macro 2
     mov rax, %1
     mov rdi, %2
@@ -199,10 +199,10 @@ my_macro 1`
 		}
 	}()
 
-	kasm.PreProcessingColectMacroCalls(source, table)
+	kasm.PreProcessingCollectMacroCalls(source, table)
 }
 
-func TestPreProcessingColectMacroCalls_LineNumber(t *testing.T) {
+func TestPreProcessingCollectMacroCalls_LineNumber(t *testing.T) {
 	source := `%macro my_macro 1
     mov rax, %1
 %endmacro
@@ -210,7 +210,7 @@ func TestPreProcessingColectMacroCalls_LineNumber(t *testing.T) {
 my_macro 42`
 
 	table := kasm.PreProcessingMacroTable(source)
-	kasm.PreProcessingColectMacroCalls(source, table)
+	kasm.PreProcessingCollectMacroCalls(source, table)
 
 	macro := table["my_macro"]
 	if len(macro.Calls) != 1 {
@@ -231,7 +231,7 @@ func TestPreProcessingReplaceMacroCalls_BasicExpansion(t *testing.T) {
 my_macro 1, 2`
 
 	table := kasm.PreProcessingMacroTable(source)
-	kasm.PreProcessingColectMacroCalls(source, table)
+	kasm.PreProcessingCollectMacroCalls(source, table)
 	result := kasm.PreProcessingReplaceMacroCalls(source, table)
 
 	if containsSubstring(result, "my_macro 1, 2") {
@@ -255,7 +255,7 @@ func TestPreProcessingReplaceMacroCalls_StripsIndentation(t *testing.T) {
 my_macro 42`
 
 	table := kasm.PreProcessingMacroTable(source)
-	kasm.PreProcessingColectMacroCalls(source, table)
+	kasm.PreProcessingCollectMacroCalls(source, table)
 	result := kasm.PreProcessingReplaceMacroCalls(source, table)
 
 	if containsSubstring(result, "    mov rax, 42") {
@@ -374,9 +374,9 @@ func BenchmarkPreProcessingMacroTable_MacroWithLargeBody(b *testing.B) {
 	}
 }
 
-// --- PreProcessingColectMacroCalls ---
+// --- PreProcessingCollectMacroCalls ---
 
-func BenchmarkPreProcessingColectMacroCalls_NoCalls(b *testing.B) {
+func BenchmarkPreProcessingCollectMacroCalls_NoCalls(b *testing.B) {
 	source := `%macro my_macro 2
     mov rax, %1
     mov rdi, %2
@@ -387,13 +387,13 @@ mov rax, 1`
 	for i := 0; i < b.N; i++ {
 		// Reset calls each iteration by rebuilding the table
 		t2 := kasm.PreProcessingMacroTable(source)
-		kasm.PreProcessingColectMacroCalls(source, t2)
+		kasm.PreProcessingCollectMacroCalls(source, t2)
 		_ = t2
 	}
 	_ = table
 }
 
-func BenchmarkPreProcessingColectMacroCalls_SingleCall(b *testing.B) {
+func BenchmarkPreProcessingCollectMacroCalls_SingleCall(b *testing.B) {
 	source := `%macro my_macro 2
     mov rax, %1
     mov rdi, %2
@@ -402,11 +402,11 @@ my_macro 1, 2`
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		table := kasm.PreProcessingMacroTable(source)
-		kasm.PreProcessingColectMacroCalls(source, table)
+		kasm.PreProcessingCollectMacroCalls(source, table)
 	}
 }
 
-func BenchmarkPreProcessingColectMacroCalls_ManyCalls(b *testing.B) {
+func BenchmarkPreProcessingCollectMacroCalls_ManyCalls(b *testing.B) {
 	var sb strings.Builder
 	sb.WriteString("%macro my_macro 2\n    mov rax, %1\n    mov rdi, %2\n%endmacro\n")
 	for i := 0; i < 50; i++ {
@@ -416,11 +416,11 @@ func BenchmarkPreProcessingColectMacroCalls_ManyCalls(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		table := kasm.PreProcessingMacroTable(source)
-		kasm.PreProcessingColectMacroCalls(source, table)
+		kasm.PreProcessingCollectMacroCalls(source, table)
 	}
 }
 
-func BenchmarkPreProcessingColectMacroCalls_MultipleMacros(b *testing.B) {
+func BenchmarkPreProcessingCollectMacroCalls_MultipleMacros(b *testing.B) {
 	var sb strings.Builder
 	for i := 0; i < 5; i++ {
 		sb.WriteString(fmt.Sprintf("%%macro mac_%d 1\n    mov rax, %%1\n%%endmacro\n", i))
@@ -434,7 +434,7 @@ func BenchmarkPreProcessingColectMacroCalls_MultipleMacros(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		table := kasm.PreProcessingMacroTable(source)
-		kasm.PreProcessingColectMacroCalls(source, table)
+		kasm.PreProcessingCollectMacroCalls(source, table)
 	}
 }
 
@@ -447,7 +447,7 @@ func BenchmarkPreProcessingReplaceMacroCalls_SingleCall(b *testing.B) {
 %endmacro
 my_macro 1, 2`
 	table := kasm.PreProcessingMacroTable(source)
-	kasm.PreProcessingColectMacroCalls(source, table)
+	kasm.PreProcessingCollectMacroCalls(source, table)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		kasm.PreProcessingReplaceMacroCalls(source, table)
@@ -462,7 +462,7 @@ func BenchmarkPreProcessingReplaceMacroCalls_ManyCalls(b *testing.B) {
 	}
 	source := sb.String()
 	table := kasm.PreProcessingMacroTable(source)
-	kasm.PreProcessingColectMacroCalls(source, table)
+	kasm.PreProcessingCollectMacroCalls(source, table)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		kasm.PreProcessingReplaceMacroCalls(source, table)
@@ -478,7 +478,7 @@ func BenchmarkPreProcessingReplaceMacroCalls_LargeBody(b *testing.B) {
 	body.WriteString("%endmacro\nbig_macro rax, rbx\n")
 	source := body.String()
 	table := kasm.PreProcessingMacroTable(source)
-	kasm.PreProcessingColectMacroCalls(source, table)
+	kasm.PreProcessingCollectMacroCalls(source, table)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		kasm.PreProcessingReplaceMacroCalls(source, table)
@@ -495,7 +495,7 @@ func BenchmarkPreProcessingReplaceMacroCalls_MultipleMacros(b *testing.B) {
 	}
 	source := sb.String()
 	table := kasm.PreProcessingMacroTable(source)
-	kasm.PreProcessingColectMacroCalls(source, table)
+	kasm.PreProcessingCollectMacroCalls(source, table)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		kasm.PreProcessingReplaceMacroCalls(source, table)

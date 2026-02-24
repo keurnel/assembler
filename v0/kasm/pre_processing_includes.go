@@ -7,8 +7,12 @@ import (
 	"strings"
 )
 
-// PreProcessingHandleIncludes - processes %include directives in the source code, replacing them with the content of the included files.
-// It returns the updated source code and a list of inclusions for error reporting and debugging.
+// Pre-compiled regex for %include directives (AR-6.3).
+var includeDirectiveRegex = regexp.MustCompile(`(?m)^\s*%include\s+"([^"]+)"\s*$`)
+
+// PreProcessingHandleIncludes processes %include directives in the source code,
+// replacing each with the content of the referenced file. It returns the
+// updated source code and a list of inclusions for error reporting and debugging.
 //
 // Only .kasm files may be included; any other file extension is a pre-processing error.
 //
@@ -19,9 +23,12 @@ import (
 //  3. Replace each %include directive with the content of the referenced file,
 //     wrapped in ; FILE: and ; END FILE: comments for traceability.
 func PreProcessingHandleIncludes(source string) (string, []PreProcessingInclusion) {
-	// Match lines of the form: %include "path/to/file"
-	includeRegex := regexp.MustCompile(`(?m)^\s*%include\s+"([^"]+)"\s*$`)
-	matches := includeRegex.FindAllStringSubmatchIndex(source, -1)
+	// Early-exit: if the source does not contain %include, skip all processing (AR-8.2).
+	if !strings.Contains(source, "%include") {
+		return source, nil
+	}
+
+	matches := includeDirectiveRegex.FindAllStringSubmatchIndex(source, -1)
 
 	// Pre-allocate with known capacity to avoid repeated slice growth
 	inclusions := make([]PreProcessingInclusion, 0, len(matches))
@@ -82,6 +89,7 @@ func PreProcessingHandleIncludes(source string) (string, []PreProcessingInclusio
 			inclusion.IncludedFilePath,
 		)
 
+		// Per-value regex: depends on the inclusion path, compiled once per path (AR-6.4).
 		includeDirectivePattern := regexp.MustCompile(`(?m)^\s*%include\s+"` + regexp.QuoteMeta(inclusion.IncludedFilePath) + `"\s*$`)
 		source = includeDirectivePattern.ReplaceAllString(source, includedContent)
 	}

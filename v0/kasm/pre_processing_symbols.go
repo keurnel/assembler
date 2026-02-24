@@ -6,10 +6,10 @@ import (
 	"strings"
 )
 
-// Pre-compiled regex for conditional directives, shared between symbols and conditionals.
-var conditionalDirectiveRegex = regexp.MustCompile(`(?m)^\s*%(ifdef|ifndef|else|endif)\s*(\w*)\s*$`)
+// Pre-compiled regex for %define directives (AR-6.3).
+var defineDirectiveRegex = regexp.MustCompile(`(?m)^\s*%define\s+(\w+)\s*$`)
 
-// PreProcessingCreateSymbolTable - scans the source code for %define directives and builds
+// PreProcessingCreateSymbolTable scans the source code for %define directives and builds
 // a symbol table mapping each defined symbol name to true.
 // Macro names from the provided macro table are also added as defined symbols.
 // It returns the symbol table for use in conditional assembly processing.
@@ -24,9 +24,14 @@ var conditionalDirectiveRegex = regexp.MustCompile(`(?m)^\s*%(ifdef|ifndef|else|
 //  3. Add all macro names from the macro table as defined symbols.
 //     Returns the completed symbol table.
 func PreProcessingCreateSymbolTable(source string, macroTable map[string]Macro) map[string]bool {
-	// Match lines of the form: %define SYMBOL_NAME
-	defineRegex := regexp.MustCompile(`(?m)^\s*%define\s+(\w+)\s*$`)
-	matches := defineRegex.FindAllStringSubmatchIndex(source, -1)
+	// Early-exit: if no %define directives exist, skip regex processing (AR-8.2).
+	// Macro names are still added below.
+	hasDefines := strings.Contains(source, "%define")
+
+	var matches [][]int
+	if hasDefines {
+		matches = defineDirectiveRegex.FindAllStringSubmatchIndex(source, -1)
+	}
 
 	type symbolEntry struct {
 		name       string // symbol name

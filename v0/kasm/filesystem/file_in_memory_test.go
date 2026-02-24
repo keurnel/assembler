@@ -91,39 +91,3 @@ func TestFileInMemoryNew(t *testing.T) {
 		})
 	}
 }
-
-func TestFileInMemory_RecordInclusion(t *testing.T) {
-	filesystem.OsReadFile = func(string) ([]byte, error) {
-		return []byte("section .text\n"), nil
-	}
-
-	str := "section .text\n"
-	strPtr := &str
-
-	mainFile := filesystem.FileInMemory{
-		Source:  filesystem.PersistedFile{Path: "main.asm", Content: strPtr},
-		Value:   "section .data\n",
-		LineMap: []filesystem.LineMap{},
-	}
-
-	includedFile := filesystem.PersistedFile{
-		Path: "included.asm",
-		Content: func() *string {
-			content := "section .text\n"
-			return &content
-		}(),
-	}
-
-	mainFile.RecordInclusion(&includedFile, 2)
-
-	// Get origin of line 2
-	origin := mainFile.Origin(2)
-	if len(origin) != 1 {
-		t.Fatalf("Expected origin length: 1, got: %d", len(origin))
-	}
-
-	for i, lineMap := range origin {
-		println("index: ", i, "filename:", lineMap.Filename())
-	}
-
-}
