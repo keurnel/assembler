@@ -81,13 +81,6 @@ func runAssembleFile(cmd *cobra.Command, args []string) error {
 	archProfile := profile.NewX8664Profile()
 	tokens := kasm.LexerNew(source, archProfile).WithDebugContext(debugCtx).Start()
 
-	// Print debug context entries when verbose mode is enabled (lexer phase).
-	if verbose {
-		for _, e := range debugCtx.Entries() {
-			cmd.PrintErrln(e.String())
-		}
-	}
-
 	// Abort if lexer recorded any errors.
 	if debugCtx.HasErrors() {
 		if !verbose {

@@ -7,6 +7,9 @@
     mov rdx, 13
 %endmacro
 
+mov rax, ebp
+
+
 hulp_functie 1, 2
 hulp_functie 3, 4
 hulp_functie 5, 6
