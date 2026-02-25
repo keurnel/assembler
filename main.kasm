@@ -7,17 +7,12 @@
     mov rdx, 13
 %endmacro
 
-mov rax, ebp
+mov rax, rsi
 
 
-hulp_functie 1, 2
-hulp_functie 3, 4
-hulp_functie 5, 6
-hulp_functie 7, 8
-
-een_macro 1, 2
-een_macro 3, 4
-een_macro 5, 6
+een_macro rax, rsi
+een_macro rax, rsi
+een_macro rax, rsi
 
 ; Start routine van het programma
 .start:

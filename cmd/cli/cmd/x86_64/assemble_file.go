@@ -111,7 +111,28 @@ func runAssembleFile(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("assembly aborted: %d error(s) during parsing", len(parseErrors))
 	}
 
-	_ = program
+	// Semantic analysis phase: validate the AST against the architecture's
+	// instruction metadata. The instruction table is flattened from all
+	// architecture groups into a single map keyed by upper-case mnemonic.
+	instrTable := buildInstructionTable()
+	semanticErrors := kasm.AnalyserNew(program, instrTable).WithDebugContext(debugCtx).Analyse()
+
+	// Print debug context entries when verbose mode is enabled (semantic phase).
+	if verbose {
+		for _, e := range debugCtx.Entries() {
+			cmd.PrintErrln(e.String())
+		}
+	}
+
+	// Abort if semantic analysis recorded any errors.
+	if len(semanticErrors) > 0 {
+		if !verbose {
+			for _, e := range debugCtx.Errors() {
+				cmd.PrintErrln(e.String())
+			}
+		}
+		return fmt.Errorf("assembly aborted: %d error(s) during semantic analysis", len(semanticErrors))
+	}
 
 	return nil
 }
@@ -155,6 +176,19 @@ func loadArchitectureInstructions() map[string]architecture.InstructionGroup {
 		groups[groupName] = *architecture.FromSlice(groupName, instructions)
 	}
 	return groups
+}
+
+// buildInstructionTable flattens all architecture instruction groups into a
+// single map keyed by upper-case mnemonic, suitable for the semantic analyser.
+// If two groups contain the same mnemonic, the last one wins (AR-3.2).
+func buildInstructionTable() map[string]architecture.Instruction {
+	table := make(map[string]architecture.Instruction)
+	for _, instructions := range _64.Instructions() {
+		for _, instr := range instructions {
+			table[instr.Mnemonic] = instr
+		}
+	}
+	return table
 }
 
 // preProcess runs the three pre-processing phases (includes, macros,
