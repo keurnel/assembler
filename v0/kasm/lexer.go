@@ -2,54 +2,10 @@ package kasm
 
 import "strings"
 
-// knownRegisters - set of recognised x86_64 register names (lower-case).
-var knownRegisters = map[string]bool{
-	// 64-bit general-purpose
-	"rax": true, "rbx": true, "rcx": true, "rdx": true,
-	"rsi": true, "rdi": true, "rbp": true, "rsp": true,
-	"r8": true, "r9": true, "r10": true, "r11": true,
-	"r12": true, "r13": true, "r14": true, "r15": true,
-	// 32-bit general-purpose
-	"eax": true, "ebx": true, "ecx": true, "edx": true,
-	"esi": true, "edi": true, "ebp": true, "esp": true,
-	"r8d": true, "r9d": true, "r10d": true, "r11d": true,
-	"r12d": true, "r13d": true, "r14d": true, "r15d": true,
-	// 16-bit general-purpose
-	"ax": true, "bx": true, "cx": true, "dx": true,
-	"si": true, "di": true, "bp": true, "sp": true,
-	// 8-bit
-	"al": true, "bl": true, "cl": true, "dl": true,
-	"ah": true, "bh": true, "ch": true, "dh": true,
-	"sil": true, "dil": true, "bpl": true, "spl": true,
-	// Segment registers
-	"cs": true, "ds": true, "es": true, "fs": true, "gs": true, "ss": true,
-	// Instruction pointer / flags
-	"rip": true, "eip": true, "rflags": true, "eflags": true,
-}
-
-// knownInstructions - set of recognised x86_64 instruction mnemonics (lower-case).
-var knownInstructions = map[string]bool{
-	"mov": true, "movzx": true, "movsx": true, "lea": true,
-	"push": true, "pop": true, "xchg": true,
-	"add": true, "sub": true, "mul": true, "imul": true,
-	"div": true, "idiv": true, "inc": true, "dec": true, "neg": true,
-	"and": true, "or": true, "xor": true, "not": true,
-	"shl": true, "shr": true, "sal": true, "sar": true,
-	"rol": true, "ror": true,
-	"cmp": true, "test": true,
-	"jmp": true, "je": true, "jne": true, "jz": true, "jnz": true,
-	"jg": true, "jge": true, "jl": true, "jle": true,
-	"ja": true, "jae": true, "jb": true, "jbe": true,
-	"call": true, "ret": true, "syscall": true, "int": true,
-	"nop": true, "hlt": true, "cli": true, "sti": true,
-	"loop": true, "loope": true, "loopne": true,
-	"cmove": true, "cmovne": true, "cmovg": true, "cmovl": true,
-	"sete": true, "setne": true, "setg": true, "setl": true,
-	"rep": true, "movsb": true, "stosb": true,
-	"cbw": true, "cwd": true, "cdq": true, "cqo": true,
-	"use": true,
-}
-
+// Lexer holds the input, position state, architecture profile, and the
+// accumulating token slice. If a Lexer value exists, it is guaranteed to hold
+// a valid input string, a valid profile, initialised position state, and an
+// empty token slice. There is no uninitialised or partially-constructed state.
 type Lexer struct {
 	Input        string // The input source code to be tokenized.
 	Position     int    // Current position in the input (points to the current character).
@@ -59,10 +15,18 @@ type Lexer struct {
 	Line   int // Current line number (for error reporting).
 	Column int // Current column number (for error reporting).
 
-	Tokens []Token
+	Tokens  []Token
+	profile ArchitectureProfile // Architecture-specific vocabulary for classification.
 }
 
-func LexerNew(input string) *Lexer {
+// LexerNew is the sole constructor. It accepts the pre-processed source string
+// and an ArchitectureProfile, and returns a *Lexer that is ready for Start()
+// to be called. There is no separate Init() or SetProfile() step.
+//
+// LexerNew is infallible — it cannot fail. Any valid string (including the
+// empty string) is accepted. The profile must not be nil; passing nil may
+// panic — this is a programming error, not a runtime error.
+func LexerNew(input string, profile ArchitectureProfile) *Lexer {
 	l := &Lexer{
 		Input:        input,
 		Position:     0,
@@ -71,13 +35,16 @@ func LexerNew(input string) *Lexer {
 		Line:         1,
 		Column:       0,
 		Tokens:       make([]Token, 0),
+		profile:      profile,
 	}
 	l.readChar()
 	return l
 }
 
-// previousTokenType - returns the type of the most recently emitted token, or an empty string if no tokens
-// have been emitted yet.
+// previousTokenType - returns the type of the most recently emitted token, or
+// -1 if no tokens have been emitted yet. Because the Tokens slice is
+// initialised as non-nil and empty, a length check is sufficient — no nil
+// guard is needed.
 func (l *Lexer) previousTokenType() TokenType {
 	if len(l.Tokens) == 0 {
 		return -1 // No tokens emitted yet
@@ -112,16 +79,17 @@ func (l *Lexer) peekChar() byte {
 	return l.Input[l.ReadPosition]
 }
 
-// skipWhitespace - advances past spaces, tabs, carriage returns and newlines,
-// collecting them into a single whitespace token.
+// skipWhitespace - advances past spaces, tabs, carriage returns and newlines.
+// No TokenWhitespace token is emitted. Because skipWhitespace() loops until a
+// non-whitespace character is found, a single invocation handles any run.
 func (l *Lexer) skipWhitespace() {
 	for l.Ch == ' ' || l.Ch == '\t' || l.Ch == '\r' || l.Ch == '\n' {
 		l.readChar()
 	}
 }
 
-// skipComment - advances past a comment starting with ';' to the end of the line,
-// collecting it into a single comment token.
+// skipComment - advances past a comment starting with ';' to the end of the line.
+// No TokenComment token is emitted.
 func (l *Lexer) skipComment() {
 	for l.Ch != '\n' && l.Ch != 0 {
 		l.readChar()
@@ -187,28 +155,31 @@ func (l *Lexer) readDirective() string {
 	return l.Input[start:l.Position]
 }
 
-// classifyWord - determines whether a word is a register, instruction or identifier.
+// classifyWord determines whether a word is a register, instruction, keyword,
+// or identifier by consulting the lexer's ArchitectureProfile. Because the
+// profile supplies the vocabulary (FR-1), the lexer core has no hardcoded
+// knowledge of any specific register or instruction name.
+//
+// When the previous token is a TokenKeyword, the current word is always
+// classified as TokenIdentifier regardless of lookup results (FR-11.2). This
+// rule takes precedence, so keywords can introduce arbitrary names without
+// the name being misclassified.
 func classifyWord(word string, lexer *Lexer) TokenType {
-	lower := strings.ToLower(word)
-	if knownRegisters[lower] {
-		return TokenRegister
-	}
-	if knownInstructions[lower] {
-		return TokenInstruction
-	}
-
-	keywords := []string{"namespace"}
-	for _, kw := range keywords {
-		if lower == kw {
-			return TokenKeyword
-		}
-	}
-
-	// When previous token is a keyword (e.g. 'namespace'), treat the current
-	// word as an identifier
-	//
+	// Context-sensitive override: keyword arguments are always identifiers.
 	if lexer.previousTokenType() == TokenKeyword {
 		return TokenIdentifier
+	}
+
+	lower := strings.ToLower(word)
+
+	if lexer.profile.Registers()[lower] {
+		return TokenRegister
+	}
+	if lexer.profile.Instructions()[lower] {
+		return TokenInstruction
+	}
+	if lexer.profile.Keywords()[lower] {
+		return TokenKeyword
 	}
 
 	return TokenIdentifier

@@ -74,7 +74,14 @@ func runAssembleFile(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("assembly aborted: %d error(s) during pre-processing", len(debugCtx.Errors()))
 	}
 
+	// Lexer phase: tokenise the pre-processed source using the x86_64
+	// architecture profile. Because the profile is constructed once and is
+	// immutable (FR-1.1.5), it can be reused across invocations.
+	profile := kasm.NewX8664Profile()
+	tokens := kasm.LexerNew(source, profile).Start()
+
 	println(source)
+	_ = tokens
 
 	return nil
 }

@@ -12,9 +12,11 @@ target architecture. Because the profile is the sole source of
 architecture-specific vocabulary, the same lexer tokenises source code for
 x86_64, ARM, RISC-V, or any future architecture without modification.
 
-The lexer lives in `v0/internal/kasm` and is consumed by the parser
+The lexer lives in `v0/kasm` and is consumed by the parser
 (`ParserNew`) and the assembly pipeline in
-`cmd/cli/cmd/x86_64/assemble_file.go`.
+`cmd/cli/cmd/x86_64/assemble_file.go`. Architecture profiles live in the
+`v0/kasm/profile` sub-package, which groups all profile-related files
+(interface, default keywords, and concrete profiles) together.
 
 ## Pipeline Position
 
@@ -85,21 +87,22 @@ type ArchitectureProfile interface {
 The package must ship at least one concrete profile for x86_64 that can be
 used directly or serve as a reference for other architectures.
 
-- **FR-1.2.1** `NewX8664Profile()` returns an `ArchitectureProfile` populated
-  with the x86_64 register set (FR-5), instruction set (FR-6), and the
-  default keyword set (FR-7). Because all three sets are assembled at
-  construction time, the returned profile is immediately ready for use —
-  there is no separate initialisation step.
+- **FR-1.2.1** `profile.NewX8664Profile()` (in `v0/kasm/profile`) returns an
+  `ArchitectureProfile` populated with the x86_64 register set (FR-5),
+  instruction set (FR-6), and the default keyword set (FR-7). Because all
+  three sets are assembled at construction time, the returned profile is
+  immediately ready for use — there is no separate initialisation step.
 - **FR-1.2.2** Additional profiles (e.g. `NewARM64Profile()`,
   `NewRISCVProfile()`) may be added in future without changing the lexer
   itself. Because the lexer depends only on the `ArchitectureProfile`
   interface (AR-2.1), adding a profile is a purely additive change.
 - **FR-1.2.3** Profiles should be constructable from the existing
-  `v0/architecture` package. A helper `ProfileFromArchitecture(groups
+  `v0/architecture` package. A helper `profile.FromArchitecture(groups
   map[string]architecture.InstructionGroup, registers map[string]bool,
-  keywords []string)` may be provided to bridge the architecture package to
-  the lexer. Because this helper lower-cases all mnemonics and merges the
-  default keyword set, callers do not need to normalise data themselves.
+  keywords []string)` (in `v0/kasm/profile`) may be provided to bridge the
+  architecture package to the lexer. Because this helper lower-cases all
+  mnemonics and merges the default keyword set, callers do not need to
+  normalise data themselves.
 
 #### FR-1.3: Integration with `v0/architecture`
 
@@ -458,66 +461,79 @@ multi-token lookahead.
 
 ### AR-1: File Layout
 
-The lexer is split across multiple files within `v0/internal/kasm`. Because
-each file owns a single concern, modifications to one concern (e.g. adding a
-register to the x86_64 profile) do not touch files that own other concerns
-(e.g. the scanning loop).
+The lexer is split across multiple files within `v0/kasm`. Profile-related
+files are grouped in the `v0/kasm/profile` sub-package. Because each file
+owns a single concern, modifications to one concern (e.g. adding a register
+to the x86_64 profile) do not touch files that own other concerns (e.g. the
+scanning loop).
 
-| File                        | Responsibility                                           |
-|-----------------------------|----------------------------------------------------------|
-| `lexer.go`                  | `Lexer` struct, `LexerNew`, `Start`, scanning methods.   |
-| `token.go`                  | `Token` struct definition.                               |
-| `token_types.go`            | `TokenType` enum and convenience methods.                |
-| `architecture_profile.go`   | `ArchitectureProfile` interface, `defaultKeywords()`.    |
-| `profile_x86_64.go`         | `NewX8664Profile()` — concrete x86_64 profile.           |
+| File                               | Responsibility                                           |
+|------------------------------------|----------------------------------------------------------|
+| `lexer.go`                         | `Lexer` struct, `LexerNew`, `Start`, scanning methods.   |
+| `token.go`                         | `Token` struct definition.                               |
+| `token_types.go`                   | `TokenType` enum and convenience methods.                |
+| `profile/architecture_profile.go`  | `ArchitectureProfile` interface, `defaultKeywords()`.    |
+| `profile/profile_x86_64.go`        | `NewX8664Profile()` — concrete x86_64 profile.           |
 
 - **AR-1.1** The core lexer (`lexer.go`) must not import or reference any
   architecture-specific data. It operates exclusively through the
-  `ArchitectureProfile` interface. Because the interface is defined in a
-  separate file (`architecture_profile.go`), and profiles implement it in
-  their own files, there is no import cycle and no compile-time coupling
-  between the lexer and any specific architecture.
-- **AR-1.2** Each architecture profile lives in its own file (e.g.
-  `profile_x86_64.go`, `profile_arm64.go`). Adding a new architecture means
-  adding a new file — no existing file is modified. Because Go compiles all
-  files in a package together, the new profile is automatically available
-  within the package without import changes.
+  `ArchitectureProfile` interface defined in `v0/kasm/profile`. Because the
+  interface is defined in a separate sub-package (`profile`), and concrete
+  profiles implement it in their own files within that sub-package, there is
+  no import cycle and no compile-time coupling between the lexer and any
+  specific architecture.
+- **AR-1.2** Each architecture profile lives in its own file within the
+  `profile` sub-package (e.g. `profile/profile_x86_64.go`,
+  `profile/profile_arm64.go`). Adding a new architecture means adding a new
+  file — no existing file is modified. Because Go compiles all files in a
+  package together, the new profile is automatically available within the
+  `profile` package without import changes.
 - **AR-1.3** The `ArchitectureProfile` interface and default keyword helper
-  live in `architecture_profile.go`, separate from both the lexer and the
-  profiles. Because neither the lexer nor the profiles own the interface
-  definition, neither has privileged access — all consumers go through the
-  same public API.
+  live in `profile/architecture_profile.go`, separate from both the lexer and
+  the concrete profiles. Because neither the lexer nor the profiles own the
+  interface definition, neither has privileged access — all consumers go
+  through the same public API.
+- **AR-1.4** Grouping all profile-related files in a dedicated `profile`
+  sub-package makes the boundary between lexer-core and vocabulary concerns
+  explicit at the package level. Because the `profile` package has its own
+  namespace, profile types and helpers (e.g. `staticProfile`,
+  `defaultKeywords`) are encapsulated and do not pollute the `kasm` package
+  namespace.
 
 ### AR-2: Separation of Concerns
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                   v0/internal/kasm                       │
+│                      v0/kasm                             │
 │                                                         │
-│  ┌──────────────────┐    ┌────────────────────────────┐ │
-│  │   Lexer (core)   │───▶│  ArchitectureProfile (if)  │ │
-│  │   lexer.go       │    │  architecture_profile.go   │ │
-│  └──────────────────┘    └────────────┬───────────────┘ │
-│                                       │ implements      │
-│                          ┌────────────┴───────────────┐ │
-│                          │  profile_x86_64.go         │ │
-│                          │  profile_arm64.go (future) │ │
-│                          │  profile_riscv.go (future) │ │
-│                          └────────────────────────────┘ │
-│                                                         │
-│  ┌──────────────────┐    ┌──────────────────┐           │
-│  │   token.go       │    │  token_types.go  │           │
-│  └──────────────────┘    └──────────────────┘           │
+│  ┌──────────────────┐                                   │
+│  │   Lexer (core)   │─── imports ──┐                    │
+│  │   lexer.go       │              │                    │
+│  └──────────────────┘              │                    │
+│                                    ▼                    │
+│  ┌──────────────────┐  ┌──────────────────────────────┐ │
+│  │   token.go       │  │       v0/kasm/profile         │ │
+│  └──────────────────┘  │                              │ │
+│  ┌──────────────────┐  │  architecture_profile.go     │ │
+│  │  token_types.go  │  │    · ArchitectureProfile (if)│ │
+│  └──────────────────┘  │    · defaultKeywords()       │ │
+│                        │                              │ │
+│                        │  profile_x86_64.go           │ │
+│                        │  profile_arm64.go (future)   │ │
+│                        │  profile_riscv.go (future)   │ │
+│                        └──────────────────────────────┘ │
 └─────────────────────────────────────────────────────────┘
 ```
 
-- **AR-2.1** The lexer core depends on the `ArchitectureProfile` interface
-  only — never on a concrete profile type. Because `lexer.go` has no import
-  of any `profile_*.go` file, this is enforced at the source level.
-- **AR-2.2** Concrete profiles may import `v0/architecture` to derive their
-  instruction sets from providers. The lexer core must not import
-  `v0/architecture`. Because the dependency flows from profile → architecture
-  and from lexer → interface, there is no path from lexer → architecture.
+- **AR-2.1** The lexer core depends on the `profile.ArchitectureProfile`
+  interface only — never on a concrete profile type. Because `lexer.go`
+  imports only the `profile` sub-package for the interface, this is enforced
+  at the source level.
+- **AR-2.2** Concrete profiles (within `v0/kasm/profile`) may import
+  `v0/architecture` to derive their instruction sets from providers. The
+  lexer core must not import `v0/architecture`. Because the dependency flows
+  from profile → architecture and from lexer → profile interface, there is no
+  path from lexer → architecture.
 - **AR-2.3** Token types and the token struct are architecture-independent.
   They must not contain any architecture-specific fields or constants.
   Because token classification happens at scan time via profile lookup, the
@@ -529,17 +545,17 @@ Adding support for a new architecture requires exactly two steps. Because the
 lexer core and the interface are untouched, the change is purely additive —
 no existing behaviour can regress.
 
-1. **Create a profile file** (e.g. `profile_arm64.go`) that implements
-   `ArchitectureProfile` with the architecture's registers, instructions, and
-   keywords.
+1. **Create a profile file** (e.g. `profile/profile_arm64.go`) in the
+   `v0/kasm/profile` sub-package that implements `ArchitectureProfile` with
+   the architecture's registers, instructions, and keywords.
 2. **Wire the profile** in the orchestrator (`assemble_file.go`) so that the
    correct profile is passed to `LexerNew` based on the target architecture.
 
 - **AR-3.1** No changes to `lexer.go`, `token.go`, `token_types.go`, or
-  `architecture_profile.go` are required when adding a new architecture.
-  Because the lexer depends only on the interface (AR-2.1), and the interface
-  is closed for modification, the lexer core is guaranteed stable across
-  architecture additions.
+  `profile/architecture_profile.go` are required when adding a new
+  architecture. Because the lexer depends only on the interface (AR-2.1), and
+  the interface is closed for modification, the lexer core is guaranteed
+  stable across architecture additions.
 - **AR-3.2** The orchestrator is responsible for selecting the correct profile
   based on CLI flags or configuration. The lexer does not perform architecture
   detection. Because profile selection happens before lexer construction
@@ -554,7 +570,7 @@ no existing behaviour can regress.
   the overhead of iterating providers at startup and make the full vocabulary
   visible in a single file. Because the maps are literals, the compiler can
   optimise them and reviewers can audit them directly.
-- **AR-4.3** A `ProfileFromArchitecture` helper may be provided for testing
+- **AR-4.3** A `profile.FromArchitecture` helper may be provided for testing
   or for architectures that prefer to derive from provider data. This helper
   must lower-case all mnemonics and merge the default keyword set. Because
   it normalises data at construction time, consumers never encounter mixed-
@@ -582,8 +598,8 @@ no existing behaviour can regress.
   sub-slicing does not copy data.
 - **NFR-1.4** Profile maps are read-only after construction. No locking or
   synchronisation is required. Because the maps are never written after
-  `NewX8664Profile()` returns (FR-1.1.5), multiple lexer instances may
-  share the same profile concurrently without data races.
+  `profile.NewX8664Profile()` returns (FR-1.1.5), multiple lexer instances
+  may share the same profile concurrently without data races.
 
 ### NFR-2: Correctness
 
@@ -611,18 +627,18 @@ no existing behaviour can regress.
   lexer has no I/O and the profile is an interface, all dependencies are
   injectable.
 - **NFR-3.2** Tests must live in the `kasm_test` package
-  (`v0/internal/kasm/lexer_test.go`) to verify the public API surface only.
+  (`v0/kasm/lexer_test.go`) to verify the public API surface only.
 - **NFR-3.3** Tests must use the x86_64 profile by default. Architecture-
   specific edge cases (e.g. a word that is a register in ARM but not x86_64)
   must be tested with a custom or mock profile. Because the profile is an
   interface (FR-1.1), tests can supply any implementation — including one
   that returns empty maps.
-- **NFR-3.4** A `NewEmptyProfile()` returning an `ArchitectureProfile` with
-  empty maps should be provided for tests that need to verify classification
-  falls through to `TokenIdentifier` for all words. Because the empty
-  profile satisfies all three map methods with valid (empty) maps
-  (FR-1.1.4), the lexer operates correctly — it simply classifies every
-  word as an identifier.
+- **NFR-3.4** A `profile.NewEmptyProfile()` (in `v0/kasm/profile`) returning
+  an `ArchitectureProfile` with empty maps should be provided for tests that
+  need to verify classification falls through to `TokenIdentifier` for all
+  words. Because the empty profile satisfies all three map methods with valid
+  (empty) maps (FR-1.1.4), the lexer operates correctly — it simply
+  classifies every word as an identifier.
 
 ### NFR-4: Integration
 
@@ -644,9 +660,9 @@ no existing behaviour can regress.
 ### NFR-5: Extensibility
 
 - **NFR-5.1** Adding a new architecture must not require changes to the lexer
-  core, the token types, or the `ArchitectureProfile` interface. Because the
-  interface is closed and the lexer depends only on the interface (AR-2.1),
-  new architectures are purely additive (AR-3.1).
+  core, the token types, or the `profile.ArchitectureProfile` interface.
+  Because the interface is closed and the lexer depends only on the interface
+  (AR-2.1), new architectures are purely additive (AR-3.1).
 - **NFR-5.2** Adding a new keyword across all architectures requires only
   updating `defaultKeywords()`. No profile files need modification unless
   they override the default keyword set. Because each profile constructor
