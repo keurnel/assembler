@@ -1,6 +1,11 @@
 package kasm
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+
+	"github.com/keurnel/assembler/internal/debugcontext"
+)
 
 // Parser holds the token slice, current position, and accumulated errors.
 // If a Parser value exists, it is guaranteed to hold a valid (possibly empty)
@@ -15,6 +20,9 @@ type Parser struct {
 
 	// errors accumulates parse errors encountered during Parse().
 	errors []ParseError
+
+	// debugCtx is an optional debug context for diagnostic recording. May be nil.
+	debugCtx *debugcontext.DebugContext
 }
 
 // ParserNew is the sole constructor. It accepts the []Token slice produced by
@@ -29,6 +37,15 @@ func ParserNew(tokens []Token) *Parser {
 		Tokens:   tokens,
 		errors:   make([]ParseError, 0),
 	}
+}
+
+// WithDebugContext attaches a debug context to the parser for diagnostic
+// recording. When set, the parser records errors and trace entries into the
+// context. When nil, the parser operates silently using only the internal
+// error slice. Returns the parser for chaining.
+func (p *Parser) WithDebugContext(ctx *debugcontext.DebugContext) *Parser {
+	p.debugCtx = ctx
+	return p
 }
 
 // ---------------------------------------------------------------------------
@@ -83,13 +100,20 @@ func (p *Parser) isAtEnd() bool {
 	return p.Position >= len(p.Tokens)
 }
 
-// addError records a parse error at the given position.
+// addError records a parse error at the given position. If a debug context
+// is attached, the error is also recorded there.
 func (p *Parser) addError(message string, line, column int) {
 	p.errors = append(p.errors, ParseError{
 		Message: message,
 		Line:    line,
 		Column:  column,
 	})
+	if p.debugCtx != nil {
+		p.debugCtx.Error(
+			p.debugCtx.Loc(line, column),
+			message,
+		)
+	}
 }
 
 // addErrorAtCurrent records a parse error at the current token's position.
@@ -133,6 +157,10 @@ func (p *Parser) recover() {
 // a *Program AST and a slice of ParseError values. It is the sole public
 // method that drives parsing.
 func (p *Parser) Parse() (*Program, []ParseError) {
+	if p.debugCtx != nil {
+		p.debugCtx.SetPhase("parser")
+	}
+
 	program := &Program{
 		Statements: make([]Statement, 0),
 	}
@@ -142,6 +170,14 @@ func (p *Parser) Parse() (*Program, []ParseError) {
 		if stmt != nil {
 			program.Statements = append(program.Statements, stmt)
 		}
+	}
+
+	if p.debugCtx != nil {
+		p.debugCtx.Trace(
+			p.debugCtx.Loc(0, 0),
+			fmt.Sprintf("parsed %d statement(s) with %d error(s) from %d token(s)",
+				len(program.Statements), len(p.errors), len(p.Tokens)),
+		)
 	}
 
 	return program, p.errors

@@ -1,8 +1,10 @@
 package kasm
 
 import (
+	"fmt"
 	"strings"
 
+	"github.com/keurnel/assembler/internal/debugcontext"
 	"github.com/keurnel/assembler/v0/kasm/profile"
 )
 
@@ -19,8 +21,9 @@ type Lexer struct {
 	Line   int // Current line number (for error reporting).
 	Column int // Current column number (for error reporting).
 
-	Tokens  []Token
-	profile profile.ArchitectureProfile // Architecture-specific vocabulary for classification.
+	Tokens   []Token
+	profile  profile.ArchitectureProfile // Architecture-specific vocabulary for classification.
+	debugCtx *debugcontext.DebugContext  // Optional debug context for diagnostic recording. May be nil.
 }
 
 // LexerNew is the sole constructor. It accepts the pre-processed source string
@@ -42,6 +45,15 @@ func LexerNew(input string, p profile.ArchitectureProfile) *Lexer {
 		profile:      p,
 	}
 	l.readChar()
+	return l
+}
+
+// WithDebugContext attaches a debug context to the lexer for diagnostic
+// recording. When set, the lexer records trace entries (e.g. token count)
+// and warnings (e.g. unterminated strings) into the context. When nil,
+// the lexer operates silently. Returns the lexer for chaining.
+func (l *Lexer) WithDebugContext(ctx *debugcontext.DebugContext) *Lexer {
+	l.debugCtx = ctx
 	return l
 }
 
@@ -128,6 +140,8 @@ func (l *Lexer) readNumber() string {
 
 // readString - reads a string literal enclosed in double quotes.
 func (l *Lexer) readString() string {
+	startLine := l.Line
+	startCol := l.Column
 	l.readChar() // skip opening '"'
 	start := l.Position
 	for l.Ch != '"' && l.Ch != 0 {
@@ -136,6 +150,11 @@ func (l *Lexer) readString() string {
 	str := l.Input[start:l.Position]
 	if l.Ch == '"' {
 		l.readChar() // skip closing '"'
+	} else if l.debugCtx != nil {
+		l.debugCtx.Warning(
+			l.debugCtx.Loc(startLine, startCol),
+			"unterminated string literal",
+		)
 	}
 	return str
 }
@@ -202,6 +221,10 @@ func (l *Lexer) addToken(tokenType TokenType, literal string, line, column int) 
 // Start - begins the tokenization process and returns a slice of tokens
 // found in the input source, in the order they appear.
 func (l *Lexer) Start() []Token {
+	if l.debugCtx != nil {
+		l.debugCtx.SetPhase("lexer")
+	}
+
 	for l.Ch != 0 {
 		line := l.Line
 		col := l.Column
@@ -245,6 +268,13 @@ func (l *Lexer) Start() []Token {
 			l.addToken(TokenIdentifier, string(l.Ch), line, col)
 			l.readChar()
 		}
+	}
+
+	if l.debugCtx != nil {
+		l.debugCtx.Trace(
+			l.debugCtx.Loc(0, 0),
+			fmt.Sprintf("tokenised %d token(s) from %d byte(s) of input", len(l.Tokens), len(l.Input)),
+		)
 	}
 
 	return l.Tokens

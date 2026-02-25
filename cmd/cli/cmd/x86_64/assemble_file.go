@@ -79,10 +79,46 @@ func runAssembleFile(cmd *cobra.Command, args []string) error {
 	// architecture profile. Because the profile is constructed once and is
 	// immutable (FR-1.1.5), it can be reused across invocations.
 	archProfile := profile.NewX8664Profile()
-	tokens := kasm.LexerNew(source, archProfile).Start()
+	tokens := kasm.LexerNew(source, archProfile).WithDebugContext(debugCtx).Start()
 
-	println(source)
-	_ = tokens
+	// Print debug context entries when verbose mode is enabled (lexer phase).
+	if verbose {
+		for _, e := range debugCtx.Entries() {
+			cmd.PrintErrln(e.String())
+		}
+	}
+
+	// Abort if lexer recorded any errors.
+	if debugCtx.HasErrors() {
+		if !verbose {
+			for _, e := range debugCtx.Errors() {
+				cmd.PrintErrln(e.String())
+			}
+		}
+		return fmt.Errorf("assembly aborted: %d error(s) during lexing", len(debugCtx.Errors()))
+	}
+
+	// Parser phase: transform the token slice into an AST.
+	program, parseErrors := kasm.ParserNew(tokens).WithDebugContext(debugCtx).Parse()
+
+	// Print debug context entries when verbose mode is enabled (parser phase).
+	if verbose {
+		for _, e := range debugCtx.Entries() {
+			cmd.PrintErrln(e.String())
+		}
+	}
+
+	// Abort if parsing recorded any errors.
+	if len(parseErrors) > 0 {
+		if !verbose {
+			for _, e := range debugCtx.Errors() {
+				cmd.PrintErrln(e.String())
+			}
+		}
+		return fmt.Errorf("assembly aborted: %d error(s) during parsing", len(parseErrors))
+	}
+
+	_ = program
 
 	return nil
 }
