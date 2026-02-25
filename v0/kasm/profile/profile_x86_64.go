@@ -1,4 +1,4 @@
-package kasm
+package profile
 
 // staticProfile is a concrete ArchitectureProfile backed by pre-built maps.
 // Because the maps are assembled at construction time, lookups are O(1) and

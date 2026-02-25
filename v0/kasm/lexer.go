@@ -1,6 +1,10 @@
 package kasm
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/keurnel/assembler/v0/kasm/profile"
+)
 
 // Lexer holds the input, position state, architecture profile, and the
 // accumulating token slice. If a Lexer value exists, it is guaranteed to hold
@@ -16,7 +20,7 @@ type Lexer struct {
 	Column int // Current column number (for error reporting).
 
 	Tokens  []Token
-	profile ArchitectureProfile // Architecture-specific vocabulary for classification.
+	profile profile.ArchitectureProfile // Architecture-specific vocabulary for classification.
 }
 
 // LexerNew is the sole constructor. It accepts the pre-processed source string
@@ -26,7 +30,7 @@ type Lexer struct {
 // LexerNew is infallible — it cannot fail. Any valid string (including the
 // empty string) is accepted. The profile must not be nil; passing nil may
 // panic — this is a programming error, not a runtime error.
-func LexerNew(input string, profile ArchitectureProfile) *Lexer {
+func LexerNew(input string, p profile.ArchitectureProfile) *Lexer {
 	l := &Lexer{
 		Input:        input,
 		Position:     0,
@@ -35,7 +39,7 @@ func LexerNew(input string, profile ArchitectureProfile) *Lexer {
 		Line:         1,
 		Column:       0,
 		Tokens:       make([]Token, 0),
-		profile:      profile,
+		profile:      p,
 	}
 	l.readChar()
 	return l

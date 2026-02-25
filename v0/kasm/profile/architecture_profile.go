@@ -1,4 +1,4 @@
-package kasm
+package profile
 
 // ArchitectureProfile represents a validated, immutable vocabulary for a
 // specific hardware architecture. If an ArchitectureProfile value exists, it
@@ -55,11 +55,11 @@ func (p *emptyProfile) Registers() map[string]bool    { return p.registers }
 func (p *emptyProfile) Instructions() map[string]bool { return p.instructions }
 func (p *emptyProfile) Keywords() map[string]bool     { return p.keywords }
 
-// ProfileFromArchitecture builds an ArchitectureProfile from architecture
+// FromArchitecture builds an ArchitectureProfile from architecture
 // instruction groups and a register map, bridging the v0/architecture package
 // to the lexer. Because this helper lower-cases all mnemonics and merges the
 // default keyword set, callers do not need to normalise data themselves.
-func ProfileFromArchitecture(groups map[string][]string, registers map[string]bool, extraKeywords ...string) ArchitectureProfile {
+func FromArchitecture(groups map[string][]string, registers map[string]bool, extraKeywords ...string) ArchitectureProfile {
 	instructions := make(map[string]bool)
 	for _, mnemonics := range groups {
 		for _, m := range mnemonics {

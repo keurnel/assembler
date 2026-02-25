@@ -10,6 +10,7 @@ import (
 	"github.com/keurnel/assembler/v0/architecture"
 	"github.com/keurnel/assembler/v0/architecture/x86/_64"
 	"github.com/keurnel/assembler/v0/kasm"
+	"github.com/keurnel/assembler/v0/kasm/profile"
 	"github.com/spf13/cobra"
 )
 
@@ -77,8 +78,8 @@ func runAssembleFile(cmd *cobra.Command, args []string) error {
 	// Lexer phase: tokenise the pre-processed source using the x86_64
 	// architecture profile. Because the profile is constructed once and is
 	// immutable (FR-1.1.5), it can be reused across invocations.
-	profile := kasm.NewX8664Profile()
-	tokens := kasm.LexerNew(source, profile).Start()
+	archProfile := profile.NewX8664Profile()
+	tokens := kasm.LexerNew(source, archProfile).Start()
 
 	println(source)
 	_ = tokens

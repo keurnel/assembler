@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/keurnel/assembler/v0/kasm"
+	"github.com/keurnel/assembler/v0/kasm/profile"
 )
 
 // ---------------------------------------------------------------------------
@@ -14,7 +15,7 @@ import (
 
 // x86Profile is the default profile used by all tests unless a specific
 // architecture edge case requires a custom profile.
-var x86Profile = kasm.NewX8664Profile()
+var x86Profile = profile.NewX8664Profile()
 
 func requireTokenCount(t *testing.T, tokens []kasm.Token, expected int) {
 	t.Helper()
