@@ -1,14 +1,11 @@
 %include "hulp.kasm"
 
+
 %macro een_macro 2
     mov rax, %1
     mov rdi, %2
-    mov rsi, message
     mov rdx, 13
 %endmacro
-
-mov rax, rsi
-
 
 een_macro rax, rsi
 een_macro rax, rsi
@@ -16,12 +13,4 @@ een_macro rax, rsi
 
 ; Start routine van het programma
 .start:
-    ret
-
-use voorbeeld
-
-_start:
-
-
-namespace voorbeeld
 
