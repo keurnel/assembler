@@ -572,6 +572,149 @@ func TestParse_ConsecutiveDirectives(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// FR-3.9 / FR-12: SectionStmt
+// ---------------------------------------------------------------------------
+
+func TestParse_Section(t *testing.T) {
+	tokens := []kasm.Token{
+		tok(kasm.TokenSection, "section", 1, 1),
+		tok(kasm.TokenIdentifier, ".data:", 1, 9),
+	}
+	program, errors := kasm.ParserNew(tokens).Parse()
+	requireNoErrors(t, errors)
+	requireStatementCount(t, program, 1)
+
+	stmt, ok := program.Statements[0].(*kasm.SectionStmt)
+	if !ok {
+		t.Fatalf("expected *SectionStmt, got %T", program.Statements[0])
+	}
+	if stmt.Name != ".data" {
+		t.Errorf("expected section name %q, got %q", ".data", stmt.Name)
+	}
+	if stmt.Line != 1 || stmt.Column != 1 {
+		t.Errorf("expected position 1:1, got %d:%d", stmt.Line, stmt.Column)
+	}
+}
+
+func TestParse_SectionTextWithColon(t *testing.T) {
+	tokens := []kasm.Token{
+		tok(kasm.TokenSection, "section", 1, 1),
+		tok(kasm.TokenIdentifier, ".text:", 1, 9),
+	}
+	program, errors := kasm.ParserNew(tokens).Parse()
+	requireNoErrors(t, errors)
+	requireStatementCount(t, program, 1)
+
+	stmt := program.Statements[0].(*kasm.SectionStmt)
+	if stmt.Name != ".text" {
+		t.Errorf("expected section name %q, got %q", ".text", stmt.Name)
+	}
+}
+
+func TestParse_SectionNameWithoutColon(t *testing.T) {
+	// Section name without trailing ':' — stored as-is (FR-12.4).
+	tokens := []kasm.Token{
+		tok(kasm.TokenSection, "section", 1, 1),
+		tok(kasm.TokenIdentifier, ".bss", 1, 9),
+	}
+	program, errors := kasm.ParserNew(tokens).Parse()
+	requireNoErrors(t, errors)
+	requireStatementCount(t, program, 1)
+
+	stmt := program.Statements[0].(*kasm.SectionStmt)
+	if stmt.Name != ".bss" {
+		t.Errorf("expected section name %q, got %q", ".bss", stmt.Name)
+	}
+}
+
+func TestParse_SectionMissingName_EndOfInput(t *testing.T) {
+	tokens := []kasm.Token{
+		tok(kasm.TokenSection, "section", 1, 1),
+	}
+	program, errors := kasm.ParserNew(tokens).Parse()
+	requireErrorCount(t, errors, 1)
+	requireStatementCount(t, program, 0)
+}
+
+func TestParse_SectionMissingName_WrongToken(t *testing.T) {
+	tokens := []kasm.Token{
+		tok(kasm.TokenSection, "section", 1, 1),
+		tok(kasm.TokenImmediate, "42", 1, 9),
+	}
+	program, errors := kasm.ParserNew(tokens).Parse()
+	// Two errors: section expects an identifier, then the stray 42
+	// causes a second error when the main loop encounters it.
+	requireErrorCount(t, errors, 2)
+	requireStatementCount(t, program, 0)
+}
+
+func TestParse_SectionFollowedByInstruction(t *testing.T) {
+	tokens := []kasm.Token{
+		tok(kasm.TokenSection, "section", 1, 1),
+		tok(kasm.TokenIdentifier, ".text:", 1, 9),
+		tok(kasm.TokenInstruction, "mov", 2, 5),
+		tok(kasm.TokenRegister, "rax", 2, 9),
+		tok(kasm.TokenIdentifier, ",", 2, 12),
+		tok(kasm.TokenImmediate, "1", 2, 14),
+	}
+	program, errors := kasm.ParserNew(tokens).Parse()
+	requireNoErrors(t, errors)
+	requireStatementCount(t, program, 2)
+
+	if _, ok := program.Statements[0].(*kasm.SectionStmt); !ok {
+		t.Errorf("expected statement[0] *SectionStmt, got %T", program.Statements[0])
+	}
+	if _, ok := program.Statements[1].(*kasm.InstructionStmt); !ok {
+		t.Errorf("expected statement[1] *InstructionStmt, got %T", program.Statements[1])
+	}
+}
+
+func TestParse_SectionRecovery(t *testing.T) {
+	// Stray register, then a section — recovery should stop at section.
+	tokens := []kasm.Token{
+		tok(kasm.TokenRegister, "rax", 1, 1),
+		tok(kasm.TokenSection, "section", 2, 1),
+		tok(kasm.TokenIdentifier, ".data:", 2, 9),
+	}
+	program, errors := kasm.ParserNew(tokens).Parse()
+	requireErrorCount(t, errors, 1)
+	requireStatementCount(t, program, 1)
+
+	if _, ok := program.Statements[0].(*kasm.SectionStmt); !ok {
+		t.Errorf("expected *SectionStmt after recovery, got %T", program.Statements[0])
+	}
+}
+
+func TestParse_Integration_Section(t *testing.T) {
+	source := `section .data:
+_start:
+    mov rax, 60`
+
+	x86Profile := profile.NewX8664Profile()
+	tokens := kasm.LexerNew(source, x86Profile).Start()
+	program, errors := kasm.ParserNew(tokens).Parse()
+	requireNoErrors(t, errors)
+
+	// section .data: + _start: + mov rax, 60 = 3 statements
+	requireStatementCount(t, program, 3)
+
+	sec, ok := program.Statements[0].(*kasm.SectionStmt)
+	if !ok {
+		t.Fatalf("expected *SectionStmt, got %T", program.Statements[0])
+	}
+	if sec.Name != ".data" {
+		t.Errorf("expected section name %q, got %q", ".data", sec.Name)
+	}
+
+	if _, ok := program.Statements[1].(*kasm.LabelStmt); !ok {
+		t.Errorf("expected *LabelStmt, got %T", program.Statements[1])
+	}
+	if _, ok := program.Statements[2].(*kasm.InstructionStmt); !ok {
+		t.Errorf("expected *InstructionStmt, got %T", program.Statements[2])
+	}
+}
+
+// ---------------------------------------------------------------------------
 // FR-5: Error handling and recovery
 // ---------------------------------------------------------------------------
 

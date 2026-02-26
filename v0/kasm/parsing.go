@@ -129,7 +129,7 @@ func (p *Parser) addErrorAtCurrent(message string) {
 // isStatementStart returns true if the given token can begin a new statement.
 func isStatementStart(tok Token) bool {
 	switch tok.Type {
-	case TokenInstruction, TokenKeyword, TokenDirective:
+	case TokenInstruction, TokenKeyword, TokenDirective, TokenSection:
 		return true
 	case TokenIdentifier:
 		// Labels (trailing ':') start a statement.
@@ -210,6 +210,9 @@ func (p *Parser) parseStatement() Statement {
 
 	case TokenDirective:
 		return p.parseDirective()
+
+	case TokenSection:
+		return p.parseSection()
 
 	case TokenRegister:
 		p.addErrorAtCurrent("unexpected register outside instruction context: " + tok.Literal)
@@ -473,5 +476,39 @@ func (p *Parser) parseDirective() Statement {
 		Args:    args,
 		Line:    dirTok.Line,
 		Column:  dirTok.Column,
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Section parsing (FR-12)
+// ---------------------------------------------------------------------------
+
+// parseSection parses a TokenSection followed by a section name identifier.
+// The trailing ':' on the section name is stripped, consistent with label-name
+// handling (FR-3.5.2, FR-12.4).
+func (p *Parser) parseSection() Statement {
+	secTok := p.advance() // consume 'section' token
+
+	if p.isAtEnd() {
+		p.addError("expected section name after 'section', got end of input", secTok.Line, secTok.Column)
+		return nil
+	}
+
+	nameTok, ok := p.expect(TokenIdentifier)
+	if !ok {
+		p.addError("expected section name after 'section', got "+nameTok.Literal, nameTok.Line, nameTok.Column)
+		return nil
+	}
+
+	// Strip trailing ':' from the section name (FR-12.4).
+	name := nameTok.Literal
+	if strings.HasSuffix(name, ":") {
+		name = name[:len(name)-1]
+	}
+
+	return &SectionStmt{
+		Name:   name,
+		Line:   secTok.Line,
+		Column: secTok.Column,
 	}
 }

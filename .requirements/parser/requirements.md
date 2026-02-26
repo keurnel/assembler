@@ -109,6 +109,7 @@ The following statement kinds must be supported:
 | `NamespaceStmt`      | A `namespace` keyword followed by a name identifier.           |
 | `UseStmt`            | A `use` instruction followed by a module name identifier.      |
 | `DirectiveStmt`      | A pre-processor directive that survived into the token stream. |
+| `SectionStmt`        | A `section` keyword followed by a section name identifier.     |
 
 #### FR-3.3: InstructionStmt
 
@@ -207,6 +208,25 @@ following kinds:
 - **FR-3.8.3** The `DirectiveStmt` must carry `Line`/`Column` from the
   directive token.
 
+#### FR-3.9: SectionStmt
+
+- **FR-3.9.1** A `SectionStmt` is produced when the parser encounters a
+  `TokenSection`. The next token must be a `TokenIdentifier` providing the
+  section name (e.g. `.data:`, `.text:`, `.bss:`). Because the lexer's
+  context-sensitive classification rule (lexer FR-11.3) ensures the token
+  after `section` is always `TokenIdentifier`, the parser can rely on the
+  type being `TokenIdentifier`.
+- **FR-3.9.2** If the `TokenSection` is not followed by a `TokenIdentifier`
+  (e.g. end of input, or a non-identifier token), the parser must record a
+  `ParseError` (e.g. "expected section name") and recover. The
+  `SectionStmt` is not emitted.
+- **FR-3.9.3** The `SectionStmt` must store the section name — the
+  identifier's literal with any trailing `:` stripped. Stripping the colon
+  is the parser's responsibility, consistent with label-name handling
+  (FR-3.5.2). If the name does not end with `:`, it is stored as-is.
+- **FR-3.9.4** The `SectionStmt` must carry `Line`/`Column` from the
+  `TokenSection` token.
+
 ### FR-4: Token Consumption
 
 The parser advances through the token slice one token at a time, using a set
@@ -247,8 +267,8 @@ recovery is straightforward — skip to the next statement boundary.
 - **FR-5.2** When the parser encounters an unexpected token, it must record a
   `ParseError` in its error accumulator and attempt recovery. Recovery
   consists of advancing past tokens until the start of a recognisable
-  statement is found (instruction, label, keyword, directive, or end of
-  input).
+  statement is found (instruction, label, keyword, section, directive, or
+  end of input).
 - **FR-5.3** The parser must not panic on any input. Malformed token
   sequences, empty slices, and unexpected token types must all be handled
   gracefully. Because every branch of the main loop either parses a known
@@ -282,6 +302,7 @@ statement kind, dispatch is a simple switch — there is no ambiguity.
   the error and recover.
 - **FR-6.7** Any other token at the top level (e.g. stray punctuation) →
   record a parse error and advance past the token.
+- **FR-6.8** `TokenSection` → parse as `SectionStmt`.
 
 ### FR-7: Instruction Parsing
 
@@ -354,6 +375,24 @@ instruction's operands.
   as raw `Token` values on the `DirectiveStmt`.
 - **FR-11.3** If the directive has no arguments, the argument slice must
   be empty (not `nil`).
+
+### FR-12: Section Parsing
+
+- **FR-12.1** The parser must consume the `TokenSection`.
+- **FR-12.2** The parser must then expect and consume a `TokenIdentifier`
+  as the section name. Because the lexer's context-sensitive classification
+  rule (lexer FR-11.3) ensures the token after `section` is always
+  `TokenIdentifier` (even if the name matches a register or instruction),
+  the parser can rely on the type being `TokenIdentifier`.
+- **FR-12.3** If the next token is not `TokenIdentifier` (e.g. end of
+  input, or a non-identifier token), a `ParseError` must be recorded.
+- **FR-12.4** The section name must be stored with any trailing `:` stripped.
+  If the identifier literal ends with `:` (e.g. `.data:`), the colon is
+  removed and the stored name is `.data`. If the literal does not end with
+  `:`, it is stored verbatim. This is consistent with label-name handling
+  (FR-3.5.2).
+- **FR-12.5** The `SectionStmt` must carry `Line`/`Column` from the
+  `TokenSection` token so that errors can reference the section position.
 
 ---
 
@@ -521,7 +560,9 @@ no cross-package import is required for the core data types.
 - **NFR-5.1** Adding a new statement kind (e.g. `SectionStmt`) requires:
   adding a new AST node type in `ast.go`, adding a dispatch case in the
   main parsing loop, and adding a parsing method in `parsing.go`. No
-  existing statement types or the `Program` struct are modified.
+  existing statement types or the `Program` struct are modified. The
+  `SectionStmt` is an example of this pattern — it was added without
+  modifying any existing statement type.
 - **NFR-5.2** Adding a new operand kind (e.g. `FloatOperand`) requires:
   adding a new `Operand` variant in `ast.go` and adding a case in the
   operand sub-parser. Existing operand kinds are not modified.
@@ -545,6 +586,7 @@ no cross-package import is required for the core data types.
 | `NamespaceStmt`    | `Name string`, `Line`, `Column`                              |
 | `UseStmt`          | `ModuleName string`, `Line`, `Column`                        |
 | `DirectiveStmt`    | `Literal string`, `Args []Token`, `Line`, `Column`           |
+| `SectionStmt`      | `Name string`, `Line`, `Column`                              |
 
 ### Operand Types
 
