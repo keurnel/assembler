@@ -19,6 +19,8 @@ const (
 	TokenString
 	// TokenKeyword - represents a reserved keyword in the assembly language (e.g., namespace).
 	TokenKeyword
+	// TokenSection - represents the section keyword (e.g., section .data:).
+	TokenSection
 )
 
 type TokenType int
@@ -76,4 +78,9 @@ func (tT TokenType) Immediate() bool {
 // TokenString - used to determine if a token is a string literal.
 func (tT TokenType) StringLiteral() bool {
 	return tT == TokenString
+}
+
+// Section - used to determine if a token is a section keyword.
+func (tT TokenType) Section() bool {
+	return tT == TokenSection
 }

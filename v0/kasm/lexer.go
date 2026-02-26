@@ -178,22 +178,33 @@ func (l *Lexer) readDirective() string {
 	return l.Input[start:l.Position]
 }
 
-// classifyWord determines whether a word is a register, instruction, keyword,
-// or identifier by consulting the lexer's ArchitectureProfile. Because the
-// profile supplies the vocabulary (FR-1), the lexer core has no hardcoded
-// knowledge of any specific register or instruction name.
+// classifyWord determines whether a word is a section keyword, register,
+// instruction, keyword, or identifier by consulting the lexer's
+// ArchitectureProfile. Because the profile supplies the vocabulary (FR-1),
+// the lexer core has no hardcoded knowledge of any specific register or
+// instruction name.
 //
-// When the previous token is a TokenKeyword, the current word is always
-// classified as TokenIdentifier regardless of lookup results (FR-11.2). This
-// rule takes precedence, so keywords can introduce arbitrary names without
-// the name being misclassified.
+// When the previous token is a TokenKeyword or TokenSection, the current word
+// is always classified as TokenIdentifier regardless of lookup results
+// (FR-11.2, FR-11.3). This rule takes precedence, so keywords and section
+// headers can introduce arbitrary names without the name being misclassified.
+//
+// The word "section" (case-insensitive) is a lexer-level language construct
+// (FR-4.8.1). It is checked before profile lookups and takes precedence over
+// any profile entry with the same name (FR-4.8.4).
 func classifyWord(word string, lexer *Lexer) TokenType {
-	// Context-sensitive override: keyword arguments are always identifiers.
-	if lexer.previousTokenType() == TokenKeyword {
+	// Context-sensitive override: keyword and section arguments are always identifiers.
+	prev := lexer.previousTokenType()
+	if prev == TokenKeyword || prev == TokenSection {
 		return TokenIdentifier
 	}
 
 	lower := strings.ToLower(word)
+
+	// Section keyword — lexer-level construct, checked before profile lookups.
+	if lower == "section" {
+		return TokenSection
+	}
 
 	if lexer.profile.Registers()[lower] {
 		return TokenRegister

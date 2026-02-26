@@ -134,6 +134,12 @@ func runAssembleFile(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("assembly aborted: %d error(s) during semantic analysis", len(semanticErrors))
 	}
 
+	// Render program
+	//
+	for _, stmt := range program.Statements {
+		println("Type:", fmt.Sprintf("%T", stmt))
+	}
+
 	return nil
 }
 

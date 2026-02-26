@@ -198,6 +198,7 @@ dropped or double-counted.
 | Immediate          | `TokenImmediate`  | Decimal (`42`) or hexadecimal (`0xFF`) numeric literal.       |
 | String             | `TokenString`     | `"…"` delimited string literal. The quotes are not stored.    |
 | Keyword            | `TokenKeyword`    | Reserved keyword from profile (e.g. `namespace`).             |
+| Section            | `TokenSection`    | `section` keyword followed by a `.`-prefixed, `:`-terminated name (e.g. `section .data:`). |
 | Identifier         | `TokenIdentifier` | Any other word, label (`_start:`), or single punctuation.     |
 
 #### FR-4.1: Whitespace
@@ -313,6 +314,37 @@ hardcoded knowledge of any specific register or instruction name.
   token. Because `readChar()` is called after the token is emitted,
   progress is guaranteed and the scanner cannot stall.
 
+#### FR-4.8: Sections
+
+A section groups related code or data. The `section` keyword introduces a
+section header. The section name that follows must start with a `.` and end
+with `:`. Two tokens are emitted: a `TokenSection` for the `section` keyword
+and a `TokenIdentifier` for the section name (including the leading `.` and
+trailing `:`).
+
+- **FR-4.8.1** The word `section` (case-insensitive) must be recognised as a
+  section keyword. When the lexer reads a word that lower-cases to `section`,
+  it must emit a `TokenSection` token with the original-cased literal (e.g.
+  `section`, `Section`, `SECTION`). Because `section` is checked before
+  profile lookups, it takes precedence over any profile entry with the same
+  name.
+- **FR-4.8.2** After a `TokenSection` token is emitted, the next word must be
+  treated as the section name. The section name must start with `.` and end
+  with `:`. The lexer reads the `.`-prefixed word and the trailing `:` as a
+  single token classified as `TokenIdentifier` (e.g. `.data:`, `.text:`,
+  `.bss:`). Because the `:` is consumed as part of the section name, it is
+  not mistaken for a label terminator on a subsequent pass.
+- **FR-4.8.3** If the word following `section` does not start with `.`, it is
+  still consumed as a normal word and classified according to the standard
+  rules (FR-4.6). The lexer does not enforce section-name syntax — that is
+  the parser's responsibility. Because the lexer is permissive, malformed
+  section headers are caught at a later stage with richer error reporting.
+- **FR-4.8.4** `section` must not appear in the profile's keyword, register,
+  or instruction maps. It is a lexer-level language construct, not an
+  architecture-specific vocabulary entry. Because `section` is handled before
+  `classifyWord()` consults the profile, there is no ambiguity even if a
+  future profile accidentally includes the name.
+
 ### FR-5: x86_64 Register Set
 
 The x86_64 profile maintains the following register names. All entries are
@@ -415,6 +447,7 @@ method maps to exactly one (or two) constants, the intent is always explicit.
 - **FR-9.8** `Register()` — returns `true` only for `TokenRegister`.
 - **FR-9.9** `Immediate()` — returns `true` only for `TokenImmediate`.
 - **FR-9.10** `StringLiteral()` — returns `true` only for `TokenString`.
+- **FR-9.11** `Section()` — returns `true` only for `TokenSection`.
 
 ### FR-10: Character Reading
 
@@ -454,6 +487,12 @@ multi-token lookahead.
   `mov`). Because this rule is checked before profile lookups in
   `classifyWord()` (FR-4.6.8), it takes absolute precedence — no keyword
   argument can be accidentally promoted to an instruction or register.
+- **FR-11.3** When the previous token is `TokenSection`, the next word must be
+  classified as `TokenIdentifier` regardless of its value. This ensures that
+  section names (e.g. `.data:`, `.text:`) are never misclassified as
+  instructions, registers, or keywords. Because this rule is checked
+  alongside the `TokenKeyword` override in `classifyWord()`, the section
+  name is always treated as a plain identifier.
 
 ---
 
@@ -668,7 +707,7 @@ no existing behaviour can regress.
   they override the default keyword set. Because each profile constructor
   calls `defaultKeywords()` (FR-7.3), the new keyword propagates
   automatically.
-- **NFR-5.3** Adding a new token type (e.g. `TokenMemoryOperand`) requires
+- **NFR-5.3** Adding a new token type (e.g. `TokenSection`) requires
   adding a constant to `token_types.go`, a convenience method, and a
   recognition rule in `Start()`. It does not require changes to the profile
   interface, because token types are a lexer-level concern — the profile
@@ -698,3 +737,4 @@ no existing behaviour can regress.
 | `TokenImmediate`  | 6            | Yes      | Numeric literals.                  |
 | `TokenString`     | 7            | Yes      | `"…"` string literals.             |
 | `TokenKeyword`    | 8            | Yes      | Profile-recognised keywords.       |
+| `TokenSection`    | 9            | Yes      | `section` keyword.                 |

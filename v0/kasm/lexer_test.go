@@ -227,6 +227,64 @@ func TestLexer_IdentifierWithDot(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Tests: section keyword
+// ---------------------------------------------------------------------------
+
+func TestLexer_SectionKeyword(t *testing.T) {
+	tokens := kasm.LexerNew("section .data:", x86Profile).Start()
+	requireTokenCount(t, tokens, 2)
+	requireToken(t, tokens[0], kasm.TokenSection, "section")
+	requireToken(t, tokens[1], kasm.TokenIdentifier, ".data:")
+}
+
+func TestLexer_SectionKeywordUpperCase(t *testing.T) {
+	tokens := kasm.LexerNew("SECTION .text:", x86Profile).Start()
+	requireTokenCount(t, tokens, 2)
+	requireToken(t, tokens[0], kasm.TokenSection, "SECTION")
+	requireToken(t, tokens[1], kasm.TokenIdentifier, ".text:")
+}
+
+func TestLexer_SectionKeywordMixedCase(t *testing.T) {
+	tokens := kasm.LexerNew("Section .bss:", x86Profile).Start()
+	requireTokenCount(t, tokens, 2)
+	requireToken(t, tokens[0], kasm.TokenSection, "Section")
+	requireToken(t, tokens[1], kasm.TokenIdentifier, ".bss:")
+}
+
+func TestLexer_SectionNameDoesNotMisclassify(t *testing.T) {
+	// Section name that matches a register should still be an identifier (FR-11.3)
+	tokens := kasm.LexerNew("section .rax:", x86Profile).Start()
+	requireTokenCount(t, tokens, 2)
+	requireToken(t, tokens[0], kasm.TokenSection, "section")
+	requireToken(t, tokens[1], kasm.TokenIdentifier, ".rax:")
+}
+
+func TestLexer_SectionWithoutDotPrefix(t *testing.T) {
+	// If the word following section doesn't start with '.', it's still classified
+	// as an identifier per FR-11.3 context-sensitive override.
+	tokens := kasm.LexerNew("section data", x86Profile).Start()
+	requireTokenCount(t, tokens, 2)
+	requireToken(t, tokens[0], kasm.TokenSection, "section")
+	requireToken(t, tokens[1], kasm.TokenIdentifier, "data")
+}
+
+func TestLexer_SectionDotWordIsNotSection(t *testing.T) {
+	// "section.text" as a single word (no space) is an identifier, not a section keyword.
+	tokens := kasm.LexerNew("section.text", x86Profile).Start()
+	requireTokenCount(t, tokens, 1)
+	requireToken(t, tokens[0], kasm.TokenIdentifier, "section.text")
+}
+
+func TestLexer_SectionConvenienceMethod(t *testing.T) {
+	if !kasm.TokenSection.Section() {
+		t.Error("TokenSection.Section() should return true")
+	}
+	if kasm.TokenIdentifier.Section() {
+		t.Error("TokenIdentifier.Section() should return false")
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Tests: punctuation / single characters
 // ---------------------------------------------------------------------------
 
