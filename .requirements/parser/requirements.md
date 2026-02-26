@@ -109,7 +109,7 @@ The following statement kinds must be supported:
 | `NamespaceStmt`      | A `namespace` keyword followed by a name identifier.           |
 | `UseStmt`            | A `use` instruction followed by a module name identifier.      |
 | `DirectiveStmt`      | A pre-processor directive that survived into the token stream. |
-| `SectionStmt`        | A `section` keyword followed by a section name identifier.     |
+| `SectionStmt`        | A `section` keyword followed by a section type and name.       |
 
 #### FR-3.3: InstructionStmt
 
@@ -210,21 +210,33 @@ following kinds:
 
 #### FR-3.9: SectionStmt
 
+A `SectionStmt` represents a section declaration with two operands: a
+**section type** (e.g. `.data`, `.text`, `.bss`) that indicates the kind of
+section, and a **section name** that is a user-chosen identifier for the
+section instance. The syntax is: `section <type>: <name>`.
+
 - **FR-3.9.1** A `SectionStmt` is produced when the parser encounters a
-  `TokenSection`. The next token must be a `TokenIdentifier` providing the
-  section name (e.g. `.data:`, `.text:`, `.bss:`). Because the lexer's
-  context-sensitive classification rule (lexer FR-11.3) ensures the token
-  after `section` is always `TokenIdentifier`, the parser can rely on the
-  type being `TokenIdentifier`.
-- **FR-3.9.2** If the `TokenSection` is not followed by a `TokenIdentifier`
-  (e.g. end of input, or a non-identifier token), the parser must record a
-  `ParseError` (e.g. "expected section name") and recover. The
+  `TokenSection`. The next two tokens must both be `TokenIdentifier` values:
+  the first provides the section type (e.g. `.data:`, `.text:`), and the
+  second provides the section name (e.g. `my_data`, `program_text`).
+  Because the lexer's context-sensitive classification rule (lexer FR-11.3)
+  ensures the token after `section` is always `TokenIdentifier`, the parser
+  can rely on the first operand's type. The second operand is also
+  `TokenIdentifier` because the section type token (starting with `.`,
+  ending with `:`) does not match any profile entry.
+- **FR-3.9.2** If the `TokenSection` is not followed by two
+  `TokenIdentifier` tokens (e.g. end of input, missing name, or a
+  non-identifier token), the parser must record a `ParseError` (e.g.
+  "expected section type" or "expected section name") and recover. The
   `SectionStmt` is not emitted.
-- **FR-3.9.3** The `SectionStmt` must store the section name — the
-  identifier's literal with any trailing `:` stripped. Stripping the colon
-  is the parser's responsibility, consistent with label-name handling
-  (FR-3.5.2). If the name does not end with `:`, it is stored as-is.
-- **FR-3.9.4** The `SectionStmt` must carry `Line`/`Column` from the
+- **FR-3.9.3** The `SectionStmt` must store the section type — the first
+  identifier's literal with any trailing `:` stripped. If the literal is
+  `.data:`, the stored type is `.data`. Stripping the colon is the parser's
+  responsibility, consistent with label-name handling (FR-3.5.2). If the
+  type does not end with `:`, it is stored as-is.
+- **FR-3.9.4** The `SectionStmt` must store the section name — the second
+  identifier's literal, stored verbatim.
+- **FR-3.9.5** The `SectionStmt` must carry `Line`/`Column` from the
   `TokenSection` token.
 
 ### FR-4: Token Consumption
@@ -380,18 +392,28 @@ instruction's operands.
 
 - **FR-12.1** The parser must consume the `TokenSection`.
 - **FR-12.2** The parser must then expect and consume a `TokenIdentifier`
-  as the section name. Because the lexer's context-sensitive classification
+  as the section type. Because the lexer's context-sensitive classification
   rule (lexer FR-11.3) ensures the token after `section` is always
   `TokenIdentifier` (even if the name matches a register or instruction),
   the parser can rely on the type being `TokenIdentifier`.
-- **FR-12.3** If the next token is not `TokenIdentifier` (e.g. end of
-  input, or a non-identifier token), a `ParseError` must be recorded.
-- **FR-12.4** The section name must be stored with any trailing `:` stripped.
+- **FR-12.3** If the first token after `section` is not `TokenIdentifier`
+  (e.g. end of input, or a non-identifier token), a `ParseError` must be
+  recorded (e.g. "expected section type after 'section'") and the parser
+  must recover. The `SectionStmt` is not emitted.
+- **FR-12.4** The section type must be stored with any trailing `:` stripped.
   If the identifier literal ends with `:` (e.g. `.data:`), the colon is
-  removed and the stored name is `.data`. If the literal does not end with
+  removed and the stored type is `.data`. If the literal does not end with
   `:`, it is stored verbatim. This is consistent with label-name handling
   (FR-3.5.2).
-- **FR-12.5** The `SectionStmt` must carry `Line`/`Column` from the
+- **FR-12.5** After consuming the section type, the parser must expect and
+  consume a second `TokenIdentifier` as the section name.
+- **FR-12.6** If the second token is not `TokenIdentifier` (e.g. end of
+  input, or a non-identifier token), a `ParseError` must be recorded
+  (e.g. "expected section name after section type") and the parser must
+  recover. The `SectionStmt` is not emitted.
+- **FR-12.7** The section name is stored verbatim from the identifier
+  literal.
+- **FR-12.8** The `SectionStmt` must carry `Line`/`Column` from the
   `TokenSection` token so that errors can reference the section position.
 
 ---
@@ -586,7 +608,7 @@ no cross-package import is required for the core data types.
 | `NamespaceStmt`    | `Name string`, `Line`, `Column`                              |
 | `UseStmt`          | `ModuleName string`, `Line`, `Column`                        |
 | `DirectiveStmt`    | `Literal string`, `Args []Token`, `Line`, `Column`           |
-| `SectionStmt`      | `Name string`, `Line`, `Column`                              |
+| `SectionStmt`      | `Type string`, `Name string`, `Line`, `Column`               |
 
 ### Operand Types
 

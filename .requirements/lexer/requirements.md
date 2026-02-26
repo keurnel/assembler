@@ -317,10 +317,17 @@ hardcoded knowledge of any specific register or instruction name.
 #### FR-4.8: Sections
 
 A section groups related code or data. The `section` keyword introduces a
-section header. The section name that follows must start with a `.` and end
-with `:`. Two tokens are emitted: a `TokenSection` for the `section` keyword
-and a `TokenIdentifier` for the section name (including the leading `.` and
-trailing `:`).
+section header with two operands: a **section type** and a **section name**.
+The section type indicates the kind of section (e.g. `.data:`, `.text:`,
+`.bss:`) and the section name is a user-chosen identifier for the section.
+Three tokens are emitted: a `TokenSection` for the `section` keyword,
+a `TokenIdentifier` for the section type, and a `TokenIdentifier` for the
+section name.
+
+Example: `section .data: my_globals` emits three tokens:
+1. `TokenSection` with literal `section`
+2. `TokenIdentifier` with literal `.data:`
+3. `TokenIdentifier` with literal `my_globals`
 
 - **FR-4.8.1** The word `section` (case-insensitive) must be recognised as a
   section keyword. When the lexer reads a word that lower-cases to `section`,
@@ -328,17 +335,20 @@ trailing `:`).
   `section`, `Section`, `SECTION`). Because `section` is checked before
   profile lookups, it takes precedence over any profile entry with the same
   name.
-- **FR-4.8.2** After a `TokenSection` token is emitted, the next word must be
-  treated as the section name. The section name must start with `.` and end
-  with `:`. The lexer reads the `.`-prefixed word and the trailing `:` as a
-  single token classified as `TokenIdentifier` (e.g. `.data:`, `.text:`,
-  `.bss:`). Because the `:` is consumed as part of the section name, it is
-  not mistaken for a label terminator on a subsequent pass.
-- **FR-4.8.3** If the word following `section` does not start with `.`, it is
+- **FR-4.8.2** After a `TokenSection` token is emitted, the next two words
+  must be treated as section operands. The first operand is the section type
+  — it must start with `.` and end with `:`. The lexer reads the `.`-prefixed
+  word and the trailing `:` as a single token classified as
+  `TokenIdentifier` (e.g. `.data:`, `.text:`, `.bss:`). Because the `:` is
+  consumed as part of the section type, it is not mistaken for a label
+  terminator on a subsequent pass. The second operand is the section name —
+  any word classified as `TokenIdentifier`.
+- **FR-4.8.3** If a word following `section` does not start with `.`, it is
   still consumed as a normal word and classified according to the standard
-  rules (FR-4.6). The lexer does not enforce section-name syntax — that is
-  the parser's responsibility. Because the lexer is permissive, malformed
-  section headers are caught at a later stage with richer error reporting.
+  rules (FR-4.6). The lexer does not enforce section-type or section-name
+  syntax — that is the parser's responsibility. Because the lexer is
+  permissive, malformed section headers are caught at a later stage with
+  richer error reporting.
 - **FR-4.8.4** `section` must not appear in the profile's keyword, register,
   or instruction maps. It is a lexer-level language construct, not an
   architecture-specific vocabulary entry. Because `section` is handled before
@@ -489,10 +499,17 @@ multi-token lookahead.
   argument can be accidentally promoted to an instruction or register.
 - **FR-11.3** When the previous token is `TokenSection`, the next word must be
   classified as `TokenIdentifier` regardless of its value. This ensures that
-  section names (e.g. `.data:`, `.text:`) are never misclassified as
-  instructions, registers, or keywords. Because this rule is checked
-  alongside the `TokenKeyword` override in `classifyWord()`, the section
-  name is always treated as a plain identifier.
+  the section type (e.g. `.data:`, `.text:`) is never misclassified as an
+  instruction, register, or keyword. Because this rule is checked alongside
+  the `TokenKeyword` override in `classifyWord()`, the section type is
+  always treated as a plain identifier. The section name (second operand)
+  is also classified as `TokenIdentifier` because the previous token is the
+  section type identifier — not a keyword, instruction, or register — so
+  `classifyWord()` falls through to the default `TokenIdentifier` case
+  naturally. No additional override is needed for the second operand unless
+  the section type literal happens to match a profile entry; however, because
+  the section type starts with `.` and ends with `:`, it never matches a
+  profile register, instruction, or keyword.
 
 ---
 
