@@ -137,7 +137,20 @@ func runAssembleFile(cmd *cobra.Command, args []string) error {
 	// Render program
 	//
 	for _, stmt := range program.Statements {
-		println("Type:", fmt.Sprintf("%T", stmt))
+
+		switch s := stmt.(type) {
+		case *kasm.InstructionStmt:
+			fmt.Printf("Instruction: %s\n", s.Mnemonic)
+			for i, op := range s.Operands {
+				fmt.Printf("  Operand %d: %T\n", i+1, op)
+			}
+		case *kasm.LabelStmt:
+			fmt.Printf("Label: %s\n", s.Name)
+		case *kasm.SectionStmt:
+			fmt.Printf("Section: %s\n", s.Name)
+			fmt.Printf("type: %s\n", s.Type)
+		}
+
 	}
 
 	return nil

@@ -483,31 +483,45 @@ func (p *Parser) parseDirective() Statement {
 // Section parsing (FR-12)
 // ---------------------------------------------------------------------------
 
-// parseSection parses a TokenSection followed by a section name identifier.
-// The trailing ':' on the section name is stripped, consistent with label-name
-// handling (FR-3.5.2, FR-12.4).
+// parseSection parses a TokenSection followed by a section type identifier and
+// a section name identifier. The trailing ':' on the section type is stripped,
+// consistent with label-name handling (FR-3.5.2, FR-12.4).
 func (p *Parser) parseSection() Statement {
 	secTok := p.advance() // consume 'section' token
 
+	// FR-12.2 / FR-12.3: expect section type.
 	if p.isAtEnd() {
-		p.addError("expected section name after 'section', got end of input", secTok.Line, secTok.Column)
+		p.addError("expected section type after 'section', got end of input", secTok.Line, secTok.Column)
+		return nil
+	}
+
+	typeTok, ok := p.expect(TokenIdentifier)
+	if !ok {
+		p.addError("expected section type after 'section', got "+typeTok.Literal, typeTok.Line, typeTok.Column)
+		return nil
+	}
+
+	// Strip trailing ':' from the section type (FR-12.4).
+	sectionType := typeTok.Literal
+	if strings.HasSuffix(sectionType, ":") {
+		sectionType = sectionType[:len(sectionType)-1]
+	}
+
+	// FR-12.5 / FR-12.6: expect section name.
+	if p.isAtEnd() {
+		p.addError("expected section name after section type", secTok.Line, secTok.Column)
 		return nil
 	}
 
 	nameTok, ok := p.expect(TokenIdentifier)
 	if !ok {
-		p.addError("expected section name after 'section', got "+nameTok.Literal, nameTok.Line, nameTok.Column)
+		p.addError("expected section name after section type, got "+nameTok.Literal, nameTok.Line, nameTok.Column)
 		return nil
 	}
 
-	// Strip trailing ':' from the section name (FR-12.4).
-	name := nameTok.Literal
-	if strings.HasSuffix(name, ":") {
-		name = name[:len(name)-1]
-	}
-
 	return &SectionStmt{
-		Name:   name,
+		Type:   sectionType,
+		Name:   nameTok.Literal,
 		Line:   secTok.Line,
 		Column: secTok.Column,
 	}

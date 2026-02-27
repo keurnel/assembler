@@ -231,41 +231,65 @@ func TestLexer_IdentifierWithDot(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestLexer_SectionKeyword(t *testing.T) {
-	tokens := kasm.LexerNew("section .data:", x86Profile).Start()
-	requireTokenCount(t, tokens, 2)
+	tokens := kasm.LexerNew("section .data: my_globals", x86Profile).Start()
+	requireTokenCount(t, tokens, 3)
 	requireToken(t, tokens[0], kasm.TokenSection, "section")
 	requireToken(t, tokens[1], kasm.TokenIdentifier, ".data:")
+	requireToken(t, tokens[2], kasm.TokenIdentifier, "my_globals")
 }
 
 func TestLexer_SectionKeywordUpperCase(t *testing.T) {
-	tokens := kasm.LexerNew("SECTION .text:", x86Profile).Start()
-	requireTokenCount(t, tokens, 2)
+	tokens := kasm.LexerNew("SECTION .text: code", x86Profile).Start()
+	requireTokenCount(t, tokens, 3)
 	requireToken(t, tokens[0], kasm.TokenSection, "SECTION")
 	requireToken(t, tokens[1], kasm.TokenIdentifier, ".text:")
+	requireToken(t, tokens[2], kasm.TokenIdentifier, "code")
 }
 
 func TestLexer_SectionKeywordMixedCase(t *testing.T) {
-	tokens := kasm.LexerNew("Section .bss:", x86Profile).Start()
-	requireTokenCount(t, tokens, 2)
+	tokens := kasm.LexerNew("Section .bss: scratch", x86Profile).Start()
+	requireTokenCount(t, tokens, 3)
 	requireToken(t, tokens[0], kasm.TokenSection, "Section")
 	requireToken(t, tokens[1], kasm.TokenIdentifier, ".bss:")
+	requireToken(t, tokens[2], kasm.TokenIdentifier, "scratch")
 }
 
-func TestLexer_SectionNameDoesNotMisclassify(t *testing.T) {
-	// Section name that matches a register should still be an identifier (FR-11.3)
-	tokens := kasm.LexerNew("section .rax:", x86Profile).Start()
-	requireTokenCount(t, tokens, 2)
+func TestLexer_SectionTypeDoesNotMisclassify(t *testing.T) {
+	// Section type that matches a register should still be an identifier (FR-11.3)
+	tokens := kasm.LexerNew("section .rax: my_sec", x86Profile).Start()
+	requireTokenCount(t, tokens, 3)
 	requireToken(t, tokens[0], kasm.TokenSection, "section")
 	requireToken(t, tokens[1], kasm.TokenIdentifier, ".rax:")
+	requireToken(t, tokens[2], kasm.TokenIdentifier, "my_sec")
+}
+
+func TestLexer_SectionNameMatchingRegister(t *testing.T) {
+	// Section name that matches a register is still an identifier because
+	// the previous token (.data:) is an identifier, not a keyword/section.
+	tokens := kasm.LexerNew("section .data: rax", x86Profile).Start()
+	requireTokenCount(t, tokens, 3)
+	requireToken(t, tokens[0], kasm.TokenSection, "section")
+	requireToken(t, tokens[1], kasm.TokenIdentifier, ".data:")
+	// "rax" after a plain identifier — classified by profile as register.
+	requireToken(t, tokens[2], kasm.TokenRegister, "rax")
 }
 
 func TestLexer_SectionWithoutDotPrefix(t *testing.T) {
 	// If the word following section doesn't start with '.', it's still classified
 	// as an identifier per FR-11.3 context-sensitive override.
-	tokens := kasm.LexerNew("section data", x86Profile).Start()
-	requireTokenCount(t, tokens, 2)
+	tokens := kasm.LexerNew("section data name", x86Profile).Start()
+	requireTokenCount(t, tokens, 3)
 	requireToken(t, tokens[0], kasm.TokenSection, "section")
 	requireToken(t, tokens[1], kasm.TokenIdentifier, "data")
+	requireToken(t, tokens[2], kasm.TokenIdentifier, "name")
+}
+
+func TestLexer_SectionTypeOnly(t *testing.T) {
+	// Section with only a type (no name) — lexer still emits what it sees.
+	tokens := kasm.LexerNew("section .data:", x86Profile).Start()
+	requireTokenCount(t, tokens, 2)
+	requireToken(t, tokens[0], kasm.TokenSection, "section")
+	requireToken(t, tokens[1], kasm.TokenIdentifier, ".data:")
 }
 
 func TestLexer_SectionDotWordIsNotSection(t *testing.T) {

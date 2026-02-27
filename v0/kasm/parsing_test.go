@@ -579,6 +579,7 @@ func TestParse_Section(t *testing.T) {
 	tokens := []kasm.Token{
 		tok(kasm.TokenSection, "section", 1, 1),
 		tok(kasm.TokenIdentifier, ".data:", 1, 9),
+		tok(kasm.TokenIdentifier, "my_globals", 1, 16),
 	}
 	program, errors := kasm.ParserNew(tokens).Parse()
 	requireNoErrors(t, errors)
@@ -588,8 +589,11 @@ func TestParse_Section(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected *SectionStmt, got %T", program.Statements[0])
 	}
-	if stmt.Name != ".data" {
-		t.Errorf("expected section name %q, got %q", ".data", stmt.Name)
+	if stmt.Type != ".data" {
+		t.Errorf("expected section type %q, got %q", ".data", stmt.Type)
+	}
+	if stmt.Name != "my_globals" {
+		t.Errorf("expected section name %q, got %q", "my_globals", stmt.Name)
 	}
 	if stmt.Line != 1 || stmt.Column != 1 {
 		t.Errorf("expected position 1:1, got %d:%d", stmt.Line, stmt.Column)
@@ -600,36 +604,66 @@ func TestParse_SectionTextWithColon(t *testing.T) {
 	tokens := []kasm.Token{
 		tok(kasm.TokenSection, "section", 1, 1),
 		tok(kasm.TokenIdentifier, ".text:", 1, 9),
+		tok(kasm.TokenIdentifier, "code", 1, 16),
 	}
 	program, errors := kasm.ParserNew(tokens).Parse()
 	requireNoErrors(t, errors)
 	requireStatementCount(t, program, 1)
 
 	stmt := program.Statements[0].(*kasm.SectionStmt)
-	if stmt.Name != ".text" {
-		t.Errorf("expected section name %q, got %q", ".text", stmt.Name)
+	if stmt.Type != ".text" {
+		t.Errorf("expected section type %q, got %q", ".text", stmt.Type)
+	}
+	if stmt.Name != "code" {
+		t.Errorf("expected section name %q, got %q", "code", stmt.Name)
 	}
 }
 
-func TestParse_SectionNameWithoutColon(t *testing.T) {
-	// Section name without trailing ':' — stored as-is (FR-12.4).
+func TestParse_SectionTypeWithoutColon(t *testing.T) {
+	// Section type without trailing ':' — stored as-is (FR-12.4).
 	tokens := []kasm.Token{
 		tok(kasm.TokenSection, "section", 1, 1),
 		tok(kasm.TokenIdentifier, ".bss", 1, 9),
+		tok(kasm.TokenIdentifier, "scratch", 1, 14),
 	}
 	program, errors := kasm.ParserNew(tokens).Parse()
 	requireNoErrors(t, errors)
 	requireStatementCount(t, program, 1)
 
 	stmt := program.Statements[0].(*kasm.SectionStmt)
-	if stmt.Name != ".bss" {
-		t.Errorf("expected section name %q, got %q", ".bss", stmt.Name)
+	if stmt.Type != ".bss" {
+		t.Errorf("expected section type %q, got %q", ".bss", stmt.Type)
 	}
+	if stmt.Name != "scratch" {
+		t.Errorf("expected section name %q, got %q", "scratch", stmt.Name)
+	}
+}
+
+func TestParse_SectionMissingType_EndOfInput(t *testing.T) {
+	tokens := []kasm.Token{
+		tok(kasm.TokenSection, "section", 1, 1),
+	}
+	program, errors := kasm.ParserNew(tokens).Parse()
+	requireErrorCount(t, errors, 1)
+	requireStatementCount(t, program, 0)
+}
+
+func TestParse_SectionMissingType_WrongToken(t *testing.T) {
+	tokens := []kasm.Token{
+		tok(kasm.TokenSection, "section", 1, 1),
+		tok(kasm.TokenImmediate, "42", 1, 9),
+	}
+	program, errors := kasm.ParserNew(tokens).Parse()
+	// Two errors: section expects an identifier for type, then the stray 42
+	// causes a second error when the main loop encounters it.
+	requireErrorCount(t, errors, 2)
+	requireStatementCount(t, program, 0)
 }
 
 func TestParse_SectionMissingName_EndOfInput(t *testing.T) {
 	tokens := []kasm.Token{
 		tok(kasm.TokenSection, "section", 1, 1),
+		tok(kasm.TokenIdentifier, ".data:", 1, 9),
 	}
 	program, errors := kasm.ParserNew(tokens).Parse()
 	requireErrorCount(t, errors, 1)
@@ -639,10 +673,11 @@ func TestParse_SectionMissingName_EndOfInput(t *testing.T) {
 func TestParse_SectionMissingName_WrongToken(t *testing.T) {
 	tokens := []kasm.Token{
 		tok(kasm.TokenSection, "section", 1, 1),
-		tok(kasm.TokenImmediate, "42", 1, 9),
+		tok(kasm.TokenIdentifier, ".data:", 1, 9),
+		tok(kasm.TokenImmediate, "99", 1, 16),
 	}
 	program, errors := kasm.ParserNew(tokens).Parse()
-	// Two errors: section expects an identifier, then the stray 42
+	// Two errors: section expects an identifier for name, then the stray 99
 	// causes a second error when the main loop encounters it.
 	requireErrorCount(t, errors, 2)
 	requireStatementCount(t, program, 0)
@@ -652,6 +687,7 @@ func TestParse_SectionFollowedByInstruction(t *testing.T) {
 	tokens := []kasm.Token{
 		tok(kasm.TokenSection, "section", 1, 1),
 		tok(kasm.TokenIdentifier, ".text:", 1, 9),
+		tok(kasm.TokenIdentifier, "code", 1, 16),
 		tok(kasm.TokenInstruction, "mov", 2, 5),
 		tok(kasm.TokenRegister, "rax", 2, 9),
 		tok(kasm.TokenIdentifier, ",", 2, 12),
@@ -675,6 +711,7 @@ func TestParse_SectionRecovery(t *testing.T) {
 		tok(kasm.TokenRegister, "rax", 1, 1),
 		tok(kasm.TokenSection, "section", 2, 1),
 		tok(kasm.TokenIdentifier, ".data:", 2, 9),
+		tok(kasm.TokenIdentifier, "my_data", 2, 16),
 	}
 	program, errors := kasm.ParserNew(tokens).Parse()
 	requireErrorCount(t, errors, 1)
@@ -686,7 +723,7 @@ func TestParse_SectionRecovery(t *testing.T) {
 }
 
 func TestParse_Integration_Section(t *testing.T) {
-	source := `section .data:
+	source := `section .data: my_data
 _start:
     mov rax, 60`
 
@@ -695,15 +732,18 @@ _start:
 	program, errors := kasm.ParserNew(tokens).Parse()
 	requireNoErrors(t, errors)
 
-	// section .data: + _start: + mov rax, 60 = 3 statements
+	// section .data: my_data + _start: + mov rax, 60 = 3 statements
 	requireStatementCount(t, program, 3)
 
 	sec, ok := program.Statements[0].(*kasm.SectionStmt)
 	if !ok {
 		t.Fatalf("expected *SectionStmt, got %T", program.Statements[0])
 	}
-	if sec.Name != ".data" {
-		t.Errorf("expected section name %q, got %q", ".data", sec.Name)
+	if sec.Type != ".data" {
+		t.Errorf("expected section type %q, got %q", ".data", sec.Type)
+	}
+	if sec.Name != "my_data" {
+		t.Errorf("expected section name %q, got %q", "my_data", sec.Name)
 	}
 
 	if _, ok := program.Statements[1].(*kasm.LabelStmt); !ok {

@@ -103,10 +103,12 @@ func (s *DirectiveStmt) statementNode()       {}
 func (s *DirectiveStmt) StatementLine() int   { return s.Line }
 func (s *DirectiveStmt) StatementColumn() int { return s.Column }
 
-// SectionStmt represents a `section` keyword followed by a section name
-// identifier. The Name field stores the section name with any trailing colon
-// stripped — consistent with label-name handling (FR-3.5.2).
+// SectionStmt represents a `section` keyword followed by a section type and
+// a section name. The Type field stores the section type (e.g. `.data`,
+// `.text`) with any trailing colon stripped — consistent with label-name
+// handling (FR-3.5.2). The Name field stores the section name verbatim.
 type SectionStmt struct {
+	Type   string
 	Name   string
 	Line   int
 	Column int

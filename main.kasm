@@ -1,4 +1,7 @@
-section .data:
+section .data: name
+
+
+
 
 ; %include "hulp.kasm"
 ;
