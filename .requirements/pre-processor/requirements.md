@@ -319,6 +319,38 @@ traceability.
   within a single invocation (FR-1.2.2), but cross-invocation cycle detection
   is an orchestrator concern.
 
+### FR-1.6: Circular Include Detection
+
+Circular inclusion occurs when a chain of `%include` directives forms a cycle
+(e.g. `a.kasm` includes `b.kasm`, which includes `a.kasm`). Detection is split
+between the pre-processor function and the orchestrator.
+
+- **FR-1.6.1** Within a single invocation of `PreProcessingHandleIncludes`, a
+  file path may appear in at most one `%include` directive. If the same path
+  appears more than once, the function must panic (FR-1.2.2). This catches
+  trivial self-inclusion and duplicate directives within the same source.
+- **FR-1.6.2** Cross-invocation circular inclusion detection is the
+  responsibility of the orchestrator. The orchestrator must maintain a set of
+  all file paths that have been included across recursive invocations of
+  `PreProcessingHandleIncludes`.
+- **FR-1.6.3** After each call to `PreProcessingHandleIncludes`, the
+  orchestrator must iterate over the returned `[]PreProcessingInclusion` and
+  check each `IncludedFilePath` against the set of previously seen paths.
+- **FR-1.6.4** If a file path has already been seen, the orchestrator must
+  report a circular inclusion error via `debugCtx.Error` with a message
+  containing the offending file path and the line number where the directive
+  was found. The orchestrator must then abort further include processing and
+  return the source as-is.
+- **FR-1.6.5** If no circular inclusion is detected, the orchestrator must add
+  all newly included file paths to the seen set before proceeding to the next
+  recursive invocation.
+- **FR-1.6.6** The root source file (the file passed to the assembler on the
+  command line) must be added to the seen set before the first invocation of
+  `PreProcessingHandleIncludes`, so that a file cannot include itself
+  indirectly through a chain that leads back to the root.
+- **FR-1.6.7** The error message must use the phrase "circular inclusion" and
+  include the file path, enabling grep-based log analysis.
+
 ---
 
 ## FR-2: Macros
