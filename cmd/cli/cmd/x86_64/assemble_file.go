@@ -10,6 +10,7 @@ import (
 	"github.com/keurnel/assembler/v0/architecture"
 	"github.com/keurnel/assembler/v0/architecture/x86/_64"
 	"github.com/keurnel/assembler/v0/kasm"
+	"github.com/keurnel/assembler/v0/kasm/dependency_graph"
 	"github.com/keurnel/assembler/v0/kasm/profile"
 	"github.com/spf13/cobra"
 )
@@ -232,6 +233,18 @@ func preProcess(source string, tracker *lineMap.Tracker, debugCtx *debugcontext.
 // and snapshots the result with source file annotations.
 func preProcessIncludes(source string, tracker *lineMap.Tracker, debugCtx *debugcontext.DebugContext) string {
 	debugCtx.SetPhase("pre-processing/includes")
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		debugCtx.Error(debugCtx.Loc(0, 0), fmt.Sprintf("unable to get working directory: %v", err))
+		return source
+	}
+
+	dependencyGraph := dependency_graph.New(source, cwd)
+
+	println(dependencyGraph)
+
+	//graph := dependencyGraph.Graph()
 
 	source, inclusions := kasm.PreProcessingHandleIncludes(source)
 

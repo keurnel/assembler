@@ -54,13 +54,13 @@ raw source
 
 The pre-processor is a single Go package (`v0/kasm`) with one file per concern:
 
-| File | Responsibility |
-|---|---|
-| `pre_processing_types.go` | Shared types used across phases (`Macro`, `MacroCall`, `MacroParameter`, `PreProcessingInclusion`, `conditionalBlock`, `stackEntry`). |
-| `pre_processing_includes.go` | Phase 1 — `%include` directive handling. |
-| `pre_processing_macros.go` | Phase 2 — `%macro` / `%endmacro` definition, call collection, and expansion. |
-| `pre_processing_symbols.go` | Symbol table construction from `%define` directives and macro names. |
-| `pre_processing_conditionals.go` | Phase 3 — `%ifdef` / `%ifndef` / `%else` / `%endif` evaluation. |
+| File                             | Responsibility                                                                                                                        |
+|----------------------------------|---------------------------------------------------------------------------------------------------------------------------------------|
+| `pre_processing_types.go`        | Shared types used across phases (`Macro`, `MacroCall`, `MacroParameter`, `PreProcessingInclusion`, `conditionalBlock`, `stackEntry`). |
+| `pre_processing_includes.go`     | Phase 1 — `%include` directive handling.                                                                                              |
+| `pre_processing_macros.go`       | Phase 2 — `%macro` / `%endmacro` definition, call collection, and expansion.                                                          |
+| `pre_processing_symbols.go`      | Symbol table construction from `%define` directives and macro names.                                                                  |
+| `pre_processing_conditionals.go` | Phase 3 — `%ifdef` / `%ifndef` / `%else` / `%endif` evaluation.                                                                       |
 
 - **AR-1.1** Each phase is isolated in its own file. A phase file must not
   import or call functions from another phase file directly.
@@ -306,15 +306,35 @@ traceability.
 
 ### FR-1.5: Recursive Includes
 
-- **FR-1.5.1** An included file may itself contain `%include` directives. The
-  pre-processor does **not** resolve these recursively within a single call to
-  `PreProcessingHandleIncludes`. Only top-level `%include` directives in the
-  input source are expanded.
-- **FR-1.5.2** Recursive resolution is the responsibility of the orchestrator.
-  If the orchestrator needs multi-level includes, it must call
-  `PreProcessingHandleIncludes` repeatedly until no `%include` directives
-  remain, tracking seen file paths externally to detect circular inclusion
-  chains.
+#### FR-1.5.1: Dependency Graph
+The first thing the pre-processor does is creating a dependency graph of all included files by recursively resolving `%include`
+directives. A valid non-circular graph is required in order to produce the final source string with all content properly inlined.
+
+More information about the dependency graph can be found in the [Dependency Graph](dependency-graph.md) document.
+
+#### FR-1.5.2: 
+
+Every file that is being included using `%include` is called a dependency. If a dependency
+contains its own `%include` directives, those are called nested dependencies. The pre-processor
+is in charge of resolving, validating and implementing the dependency graph into the
+top-level source.
+
+- **FR-1.5.1** The pre-processor generates a dependency graph by recursively resolving
+  `%include` directives in included files. When a file is included, the pre-processor must
+  scan its content for additional `%include` directives and resolve those as well, building
+  a complete graph of all dependencies.
+    - **FR-1.5.1.1** The dependency graph is a directed acyclic graph (DAG) where nodes are files and edges
+      represent `%include` relationships. The root node is the top-level source file, and leaf
+      nodes are files that do not include any others.
+    - **FR-1.5.1.2** The dependency graph must be built in a depth-first manner, so that nested dependencies are
+      resolved
+      before their parents. This ensures that the final source string is constructed in the correct
+      order, with all nested content properly inlined.
+    - **FR-1.5.1.3** shared dependencies (files included by multiple parents) result in a single node in the
+      graph, the source is included once and shared with all parents that reference it.
+- **FR-1.5.2** The pre-processor crashes on circular dependencies.
+
+
 - **FR-1.5.3** The function itself detects duplicate `%include` directives
   within a single invocation (FR-1.2.2), but cross-invocation cycle detection
   is an orchestrator concern.
@@ -559,11 +579,11 @@ instead of aborting on the first problem.
 
 - **FR-5.2.1** Functions that return a transformed source should gain an `error`
   return value:
-  - `PreProcessingHandleIncludes(source) → (string, []PreProcessingInclusion, error)`
-  - `PreProcessingCollectMacroCalls(source, macroTable) → error`
-  - `PreProcessingReplaceMacroCalls(source, macroTable) → (string, error)`
-  - `PreProcessingCreateSymbolTable(source, macroTable) → (map[string]bool, error)`
-  - `PreProcessingHandleConditionals(source, definedSymbols) → (string, error)`
+    - `PreProcessingHandleIncludes(source) → (string, []PreProcessingInclusion, error)`
+    - `PreProcessingCollectMacroCalls(source, macroTable) → error`
+    - `PreProcessingReplaceMacroCalls(source, macroTable) → (string, error)`
+    - `PreProcessingCreateSymbolTable(source, macroTable) → (map[string]bool, error)`
+    - `PreProcessingHandleConditionals(source, definedSymbols) → (string, error)`
 - **FR-5.2.2** Structural errors (unmatched `%endif`, `%else` without `%ifdef`,
   `%macro` without `%endmacro`) may remain as panics because they indicate a
   fundamentally broken source that cannot be partially processed.
