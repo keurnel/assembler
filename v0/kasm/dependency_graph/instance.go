@@ -3,8 +3,6 @@ package dependency_graph
 import (
 	"fmt"
 	"os"
-	"sync"
-	"sync/atomic"
 )
 
 var (
@@ -76,57 +74,34 @@ func (i *Instance) AddNode(node *DependencyGraphNode) {
 
 // Acyclic - checks if the graph is acyclic.
 func (i *Instance) Acyclic() bool {
-	var (
-		mu       sync.Mutex
-		wg       sync.WaitGroup
-		isCyclic atomic.Bool
-	)
-
-	visited := make(map[string]bool)
-	recStack := make(map[string]bool)
+	visited := make(map[string]bool, len(i.nodes))
+	recStack := make(map[string]bool, len(i.nodes))
 
 	for nodeName := range i.nodes {
-		mu.Lock()
-		alreadyVisited := visited[nodeName]
-		mu.Unlock()
-
-		if alreadyVisited || isCyclic.Load() {
-			continue
+		if !visited[nodeName] {
+			if i.cyclic(nodeName, visited, recStack) {
+				return false
+			}
 		}
-
-		wg.Add(1)
-		go func(name string) {
-			defer wg.Done()
-
-			mu.Lock()
-			if visited[name] {
-				mu.Unlock()
-				return
-			}
-			if i.Cyclic(name, visited, recStack) {
-				isCyclic.Store(true)
-			}
-			mu.Unlock()
-		}(nodeName)
 	}
 
-	wg.Wait()
-	return !isCyclic.Load()
+	return true
 }
 
-// Cyclic - helper function for Acyclic to perform DFS and detect cycles in the graph.
-func (i *Instance) Cyclic(nodeName string, visited, recStack map[string]bool) bool {
+// cyclic - performs DFS to detect cycles in the graph.
+func (i *Instance) cyclic(nodeName string, visited, recStack map[string]bool) bool {
 	visited[nodeName] = true
 	recStack[nodeName] = true
 
-	node := i.nodes[nodeName]
-	for _, edge := range node.edges {
-		if !visited[edge.to.name] {
-			if i.Cyclic(edge.to.name, visited, recStack) {
+	for _, edge := range i.nodes[nodeName].edges {
+		target := edge.to.name
+		if recStack[target] {
+			return true
+		}
+		if !visited[target] {
+			if i.cyclic(target, visited, recStack) {
 				return true
 			}
-		} else if recStack[edge.to.name] {
-			return true
 		}
 	}
 
