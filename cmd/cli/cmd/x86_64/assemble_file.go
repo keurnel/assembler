@@ -72,9 +72,6 @@ func runAssembleFile(cmd *cobra.Command, args []string) error {
 
 	source = preProcess(source, fullPath, tracker, debugCtx)
 
-	// Write source to file
-	os.WriteFile("preprocessed.kasm", []byte(source), 0644)
-
 	// Print debug context entries when verbose mode is enabled.
 	if verbose {
 		for _, e := range debugCtx.Entries() {
@@ -236,6 +233,9 @@ func preProcess(source string, rootFilePath string, tracker *lineMap.Tracker, de
 	if debugCtx.HasErrors() {
 		return source
 	}
+
+	// Write the include-resolved source for debugging (before macro/conditional expansion).
+	os.WriteFile("preprocessed.kasm", []byte(source), 0644)
 
 	source = preProcessMacros(source, tracker, debugCtx)
 	if debugCtx.HasErrors() {
