@@ -22,6 +22,8 @@ type Instance struct {
 
 	// cwd - the current working directory for resolving relative paths
 	cwd string
+	// rootFilePath - absolute path of the root source file
+	rootFilePath string
 	// source - original source code
 	source string
 	// nodes - map of nodes in the graph
@@ -29,12 +31,17 @@ type Instance struct {
 }
 
 // New - creates a new instance of the dependency graph.
-func New(source, cwd string) *Instance {
+// rootFilePath is the absolute path of the top-level source file; it is added
+// as a node so that cycles involving the root are reported starting from it.
+// Pass an empty string to omit the root node (e.g. in tests that build graphs
+// programmatically).
+func New(source, cwd, rootFilePath string) *Instance {
 	instance := Instance{
-		metaData: &InstanceMetaData{},
-		cwd:      cwd,
-		source:   source,
-		nodes:    make(map[string]*DependencyGraphNode),
+		metaData:     &InstanceMetaData{},
+		cwd:          cwd,
+		rootFilePath: rootFilePath,
+		source:       source,
+		nodes:        make(map[string]*DependencyGraphNode),
 	}
 
 	// -- FR-1.1.1 - dependency graph receives working directory
@@ -87,8 +94,15 @@ func (i *Instance) AddNode(node *DependencyGraphNode) {
 
 // build - builds the dependency graph from the source code by scanning for
 // %include directives and recursively resolving nested dependencies (FR-4, FR-5).
+// When rootFilePath is set, a node is created for the root file so that cycles
+// involving it are reported starting from the root.
 func (i *Instance) build() {
-	i.scanSource(i.source, nil)
+	var rootNode *DependencyGraphNode
+	if i.rootFilePath != "" {
+		rootNode = DependencyGraphNodeNew(i.rootFilePath, i.source)
+		i.AddNode(rootNode)
+	}
+	i.scanSource(i.source, rootNode)
 }
 
 // scanSource recursively scans the given source for %include directives,

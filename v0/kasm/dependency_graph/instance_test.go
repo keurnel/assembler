@@ -34,7 +34,7 @@ func TestNewInstance(t *testing.T) {
 			dependency_graph.OsStat = os.Stat
 		}()
 
-		instance := dependency_graph.New("source code", "/path/to/valid/directory")
+		instance := dependency_graph.New("source code", "/path/to/valid/directory", "")
 		if instance == nil {
 			t.Errorf("expected instance to be created for valid working directory, but got nil")
 		}
@@ -55,7 +55,7 @@ func TestNewInstance(t *testing.T) {
 			dependency_graph.OsStat = os.Stat
 		}()
 
-		dependency_graph.New("source code", "/path/to/nonexistent/directory")
+		dependency_graph.New("source code", "/path/to/nonexistent/directory", "")
 	})
 
 	// Panics on permission denied working directory.
@@ -73,7 +73,7 @@ func TestNewInstance(t *testing.T) {
 			dependency_graph.OsStat = os.Stat
 		}()
 
-		dependency_graph.New("source code", "/path/to/permission/denied/directory")
+		dependency_graph.New("source code", "/path/to/permission/denied/directory", "")
 	})
 
 	// Panics when given a path that is not a directory.
@@ -91,7 +91,7 @@ func TestNewInstance(t *testing.T) {
 			dependency_graph.OsStat = os.Stat
 		}()
 
-		dependency_graph.New("source code", "/path/to/file/instead/of/directory")
+		dependency_graph.New("source code", "/path/to/file/instead/of/directory", "")
 	})
 }
 
@@ -108,7 +108,7 @@ func TestAcyclic(t *testing.T) {
 			dependency_graph.OsStat = os.Stat
 		}()
 
-		instance := dependency_graph.New("source code", "/path/to/valid/directory")
+		instance := dependency_graph.New("source code", "/path/to/valid/directory", "")
 		nodeA := dependency_graph.DependencyGraphNodeNew("A", "source A")
 		nodeB := dependency_graph.DependencyGraphNodeNew("B", "source B")
 		nodeC := dependency_graph.DependencyGraphNodeNew("C", "source C")
@@ -139,7 +139,7 @@ func TestAcyclic(t *testing.T) {
 			dependency_graph.OsStat = os.Stat
 		}()
 
-		instance := dependency_graph.New("source code", "/path/to/valid/directory")
+		instance := dependency_graph.New("source code", "/path/to/valid/directory", "")
 
 		// Amount random nodes and edges to create.
 		//
@@ -180,7 +180,7 @@ func TestAcyclic(t *testing.T) {
 			dependency_graph.OsStat = os.Stat
 		}()
 
-		instance := dependency_graph.New("source code", "/path/to/valid/directory")
+		instance := dependency_graph.New("source code", "/path/to/valid/directory", "")
 		nodeA := dependency_graph.DependencyGraphNodeNew("A", "source A")
 		nodeB := dependency_graph.DependencyGraphNodeNew("B", "source B")
 		nodeC := dependency_graph.DependencyGraphNodeNew("C", "source C")
@@ -205,7 +205,7 @@ func TestAcyclic(t *testing.T) {
 			dependency_graph.OsStat = os.Stat
 		}()
 
-		instance := dependency_graph.New("source code", "/path/to/valid/directory")
+		instance := dependency_graph.New("source code", "/path/to/valid/directory", "")
 		if !instance.Acyclic() {
 			t.Errorf("expected empty graph to be acyclic, but got cyclic")
 		}
@@ -222,7 +222,7 @@ func TestAcyclic(t *testing.T) {
 			dependency_graph.OsStat = os.Stat
 		}()
 
-		instance := dependency_graph.New("source code", "/path/to/valid/directory")
+		instance := dependency_graph.New("source code", "/path/to/valid/directory", "")
 		nodeA := dependency_graph.DependencyGraphNodeNew("A", "source A")
 		nodeB := dependency_graph.DependencyGraphNodeNew("B", "source B")
 		nodeC := dependency_graph.DependencyGraphNodeNew("C", "source C")
@@ -255,7 +255,7 @@ func TestAcyclic(t *testing.T) {
 			dependency_graph.OsStat = os.Stat
 		}()
 
-		instance := dependency_graph.New("source code", "/path/to/valid/directory")
+		instance := dependency_graph.New("source code", "/path/to/valid/directory", "")
 		nodeA := dependency_graph.DependencyGraphNodeNew("A", "source A")
 
 		instance.AddNode(nodeA)
@@ -278,7 +278,7 @@ func TestAcyclic(t *testing.T) {
 			dependency_graph.OsStat = os.Stat
 		}()
 
-		instance := dependency_graph.New("source code", "/path/to/valid/directory")
+		instance := dependency_graph.New("source code", "/path/to/valid/directory", "")
 		nodeA := dependency_graph.DependencyGraphNodeNew("A", "")
 		nodeB := dependency_graph.DependencyGraphNodeNew("B", "")
 		nodeC := dependency_graph.DependencyGraphNodeNew("C", "")
@@ -309,7 +309,7 @@ func TestAcyclic(t *testing.T) {
 			dependency_graph.OsStat = os.Stat
 		}()
 
-		instance := dependency_graph.New("source code", "/path/to/valid/directory")
+		instance := dependency_graph.New("source code", "/path/to/valid/directory", "")
 		// Component 1: A → B
 		nodeA := dependency_graph.DependencyGraphNodeNew("A", "")
 		nodeB := dependency_graph.DependencyGraphNodeNew("B", "")
@@ -339,7 +339,7 @@ func TestAcyclic(t *testing.T) {
 			dependency_graph.OsStat = os.Stat
 		}()
 
-		instance := dependency_graph.New("source code", "/path/to/valid/directory")
+		instance := dependency_graph.New("source code", "/path/to/valid/directory", "")
 		// Component 1: A → B (acyclic)
 		nodeA := dependency_graph.DependencyGraphNodeNew("A", "")
 		nodeB := dependency_graph.DependencyGraphNodeNew("B", "")
@@ -380,7 +380,7 @@ func TestBuild_SingleInclude(t *testing.T) {
 	}()
 
 	source := `%include "helper.kasm"`
-	instance := dependency_graph.New(source, "/project")
+	instance := dependency_graph.New(source, "/project", "")
 
 	nodes := instance.Nodes()
 	if len(nodes) != 1 {
@@ -406,7 +406,7 @@ func TestBuild_MultipleIncludes(t *testing.T) {
 	}()
 
 	source := "%include \"a.kasm\"\n%include \"b.kasm\""
-	instance := dependency_graph.New(source, "/project")
+	instance := dependency_graph.New(source, "/project", "")
 
 	nodes := instance.Nodes()
 	if len(nodes) != 2 {
@@ -436,7 +436,7 @@ func TestBuild_RecursiveIncludes(t *testing.T) {
 	}()
 
 	source := `%include "b.kasm"`
-	instance := dependency_graph.New(source, "/project")
+	instance := dependency_graph.New(source, "/project", "")
 
 	nodes := instance.Nodes()
 	if len(nodes) != 2 {
@@ -474,7 +474,7 @@ func TestBuild_SharedDependency(t *testing.T) {
 	}()
 
 	source := "%include \"a.kasm\"\n%include \"b.kasm\""
-	instance := dependency_graph.New(source, "/project")
+	instance := dependency_graph.New(source, "/project", "")
 
 	nodes := instance.Nodes()
 	// a.kasm, b.kasm, shared.kasm — shared.kasm is only one node.
@@ -502,7 +502,7 @@ func TestBuild_NonKasmPanics(t *testing.T) {
 	}()
 
 	source := `%include "module.asm"`
-	dependency_graph.New(source, "/project")
+	dependency_graph.New(source, "/project", "")
 }
 
 // TestBuild_FileReadErrorPanics verifies FR-6.2: unreadable files cause a panic.
@@ -527,7 +527,7 @@ func TestBuild_FileReadErrorPanics(t *testing.T) {
 	}()
 
 	source := `%include "missing.kasm"`
-	dependency_graph.New(source, "/project")
+	dependency_graph.New(source, "/project", "")
 }
 
 // TestBuild_NoIncludes verifies that build() creates no nodes when there are
@@ -540,7 +540,7 @@ func TestBuild_NoIncludes(t *testing.T) {
 		dependency_graph.OsStat = os.Stat
 	}()
 
-	instance := dependency_graph.New("mov rax, 1", "/project")
+	instance := dependency_graph.New("mov rax, 1", "/project", "")
 	if len(instance.Nodes()) != 0 {
 		t.Errorf("expected 0 nodes, got %d", len(instance.Nodes()))
 	}
@@ -557,7 +557,7 @@ func TestBuild_SkipsMalformedDirective(t *testing.T) {
 	}()
 
 	source := "%include\nmov rax, 1"
-	instance := dependency_graph.New(source, "/project")
+	instance := dependency_graph.New(source, "/project", "")
 	if len(instance.Nodes()) != 0 {
 		t.Errorf("expected 0 nodes for malformed directive, got %d", len(instance.Nodes()))
 	}
@@ -576,7 +576,7 @@ func TestCyclePath_Acyclic(t *testing.T) {
 		dependency_graph.OsStat = os.Stat
 	}()
 
-	instance := dependency_graph.New("", "/project")
+	instance := dependency_graph.New("", "/project", "")
 	nodeA := dependency_graph.DependencyGraphNodeNew("A", "")
 	nodeB := dependency_graph.DependencyGraphNodeNew("B", "")
 	instance.AddNode(nodeA)
@@ -598,7 +598,7 @@ func TestCyclePath_SimpleCycle(t *testing.T) {
 		dependency_graph.OsStat = os.Stat
 	}()
 
-	instance := dependency_graph.New("", "/project")
+	instance := dependency_graph.New("", "/project", "")
 	nodeA := dependency_graph.DependencyGraphNodeNew("A", "")
 	nodeB := dependency_graph.DependencyGraphNodeNew("B", "")
 	nodeC := dependency_graph.DependencyGraphNodeNew("C", "")
@@ -631,7 +631,7 @@ func TestCyclePath_SelfLoop(t *testing.T) {
 		dependency_graph.OsStat = os.Stat
 	}()
 
-	instance := dependency_graph.New("", "/project")
+	instance := dependency_graph.New("", "/project", "")
 	nodeA := dependency_graph.DependencyGraphNodeNew("A", "")
 	instance.AddNode(nodeA)
 	nodeA.AddEdge(dependency_graph.DependencyGraphEdgeNew("include", nodeA, nodeA))
@@ -654,7 +654,7 @@ func TestCyclePath_EmptyGraph(t *testing.T) {
 		dependency_graph.OsStat = os.Stat
 	}()
 
-	instance := dependency_graph.New("", "/project")
+	instance := dependency_graph.New("", "/project", "")
 	if instance.CyclePath() != nil {
 		t.Error("expected nil for empty graph")
 	}
@@ -673,7 +673,7 @@ func TestString_EmptyGraph(t *testing.T) {
 		dependency_graph.OsStat = os.Stat
 	}()
 
-	instance := dependency_graph.New("", "/project")
+	instance := dependency_graph.New("", "/project", "")
 	result := instance.String()
 	if result != "(empty graph)" {
 		t.Errorf("expected '(empty graph)', got %q", result)
@@ -689,7 +689,7 @@ func TestString_SingleNode(t *testing.T) {
 		dependency_graph.OsStat = os.Stat
 	}()
 
-	instance := dependency_graph.New("", "/project")
+	instance := dependency_graph.New("", "/project", "")
 	nodeA := dependency_graph.DependencyGraphNodeNew("A", "")
 	instance.AddNode(nodeA)
 
@@ -708,7 +708,7 @@ func TestString_WithEdges(t *testing.T) {
 		dependency_graph.OsStat = os.Stat
 	}()
 
-	instance := dependency_graph.New("", "/project")
+	instance := dependency_graph.New("", "/project", "")
 	nodeA := dependency_graph.DependencyGraphNodeNew("A", "")
 	nodeB := dependency_graph.DependencyGraphNodeNew("B", "")
 	instance.AddNode(nodeA)
@@ -736,7 +736,7 @@ func TestString_SharedDependency(t *testing.T) {
 		dependency_graph.OsStat = os.Stat
 	}()
 
-	instance := dependency_graph.New("", "/project")
+	instance := dependency_graph.New("", "/project", "")
 	root := dependency_graph.DependencyGraphNodeNew("root", "")
 	nodeA := dependency_graph.DependencyGraphNodeNew("A", "")
 	nodeB := dependency_graph.DependencyGraphNodeNew("B", "")
@@ -771,7 +771,7 @@ func TestToDot_EmptyGraph(t *testing.T) {
 		dependency_graph.OsStat = os.Stat
 	}()
 
-	instance := dependency_graph.New("", "/project")
+	instance := dependency_graph.New("", "/project", "")
 	result := instance.ToDot()
 	expected := "digraph dependencies {\n}"
 	if result != expected {
@@ -788,7 +788,7 @@ func TestToDot_WithNodes(t *testing.T) {
 		dependency_graph.OsStat = os.Stat
 	}()
 
-	instance := dependency_graph.New("", "/project")
+	instance := dependency_graph.New("", "/project", "")
 	nodeA := dependency_graph.DependencyGraphNodeNew("A", "")
 	nodeB := dependency_graph.DependencyGraphNodeNew("B", "")
 	instance.AddNode(nodeA)
@@ -822,7 +822,7 @@ func TestToDot_CyclicHighlighting(t *testing.T) {
 		dependency_graph.OsStat = os.Stat
 	}()
 
-	instance := dependency_graph.New("", "/project")
+	instance := dependency_graph.New("", "/project", "")
 	nodeA := dependency_graph.DependencyGraphNodeNew("A", "")
 	nodeB := dependency_graph.DependencyGraphNodeNew("B", "")
 	instance.AddNode(nodeA)
@@ -845,7 +845,7 @@ func TestToDot_NoTrailingNewline(t *testing.T) {
 		dependency_graph.OsStat = os.Stat
 	}()
 
-	instance := dependency_graph.New("", "/project")
+	instance := dependency_graph.New("", "/project", "")
 	result := instance.ToDot()
 	if result[len(result)-1] == '\n' {
 		t.Error("DOT output must not end with a trailing newline")
@@ -866,7 +866,7 @@ func TestString_Idempotent(t *testing.T) {
 		dependency_graph.OsStat = os.Stat
 	}()
 
-	instance := dependency_graph.New("", "/project")
+	instance := dependency_graph.New("", "/project", "")
 	nodeA := dependency_graph.DependencyGraphNodeNew("A", "")
 	nodeB := dependency_graph.DependencyGraphNodeNew("B", "")
 	nodeC := dependency_graph.DependencyGraphNodeNew("C", "")
@@ -894,7 +894,7 @@ func TestToDot_Idempotent(t *testing.T) {
 		dependency_graph.OsStat = os.Stat
 	}()
 
-	instance := dependency_graph.New("", "/project")
+	instance := dependency_graph.New("", "/project", "")
 	nodeA := dependency_graph.DependencyGraphNodeNew("A", "")
 	nodeB := dependency_graph.DependencyGraphNodeNew("B", "")
 	instance.AddNode(nodeA)
@@ -931,7 +931,7 @@ func BenchmarkAcyclic(b *testing.B) {
 		dependency_graph.OsStat = os.Stat
 	}()
 
-	instance := dependency_graph.New("source code", "/path/to/valid/directory")
+	instance := dependency_graph.New("source code", "/path/to/valid/directory", "")
 
 	// Create a large acyclic graph.
 	numNodes := 1000

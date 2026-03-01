@@ -245,7 +245,7 @@ func preProcessIncludes(source string, rootFilePath string, tracker *lineMap.Tra
 		return source
 	}
 
-	dependencyGraph := dependency_graph.New(source, cwd)
+	dependencyGraph := dependency_graph.New(source, cwd, rootFilePath)
 
 	// FR-11.4.1: Log the text representation of the dependency graph via
 	// debugCtx.Trace so it appears in verbose mode output.
