@@ -30,6 +30,7 @@ var AssembleFileCmd = &cobra.Command{
 
 func init() {
 	AssembleFileCmd.Flags().BoolP("verbose", "v", false, "Show debug context logs (trace, info, warning) during assembly")
+	AssembleFileCmd.Flags().Bool("dependency-graph-dot", false, "Print the dependency graph in Graphviz DOT format and exit")
 }
 
 // runAssembleFile orchestrates the full assembly pipeline: resolve the file,
@@ -47,6 +48,18 @@ func runAssembleFile(cmd *cobra.Command, args []string) error {
 	source, err := readSourceFile(fullPath)
 	if err != nil {
 		return err
+	}
+
+	// FR-11.4.2: When --dependency-graph-dot is set, build the dependency
+	// graph, print its DOT representation to stdout, and exit early.
+	if dot, _ := cmd.Flags().GetBool("dependency-graph-dot"); dot {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("unable to get working directory: %w", err)
+		}
+		graph := dependency_graph.New(source, cwd, fullPath)
+		fmt.Println(graph.ToDot())
+		return nil
 	}
 
 	// Create the debug context for this assembly invocation (FR-9.1).
