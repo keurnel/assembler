@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/keurnel/assembler/internal/debugcontext"
+	"github.com/keurnel/assembler/v0/kasm/ast"
 	"github.com/keurnel/assembler/v0/architecture"
 )
 
@@ -48,12 +49,12 @@ type LineMapper interface {
 	Origin(lineNumber int) int
 }
 
-// Analyser validates a *Program AST against the rules of the .kasm language
+// Analyser validates a *ast.Program AST against the rules of the .kasm language
 // and the target architecture. It detects errors that are syntactically legal
 // but semantically invalid. If an Analyser value exists, it is guaranteed to
 // hold a valid program reference and initialised internal state.
 type Analyser struct {
-	program      *Program
+	program      *ast.Program
 	instructions map[string]architecture.Instruction // Upper-case mnemonic keys.
 	labels       map[string]labelDecl
 	namespaces   map[string]namespaceDecl
@@ -63,13 +64,13 @@ type Analyser struct {
 	lineMapper   LineMapper
 }
 
-// AnalyserNew is the sole constructor. It accepts the *Program AST produced by
+// AnalyserNew is the sole constructor. It accepts the *ast.Program AST produced by
 // Parser.Parse() and an instruction lookup table (upper-case mnemonic keys),
 // and returns an *Analyser that is ready for Analyse() to be called.
 // AnalyserNew is infallible — it cannot fail. A nil program is treated as empty.
-func AnalyserNew(program *Program, instructions map[string]architecture.Instruction) *Analyser {
+func AnalyserNew(program *ast.Program, instructions map[string]architecture.Instruction) *Analyser {
 	if program == nil {
-		program = &Program{Statements: make([]Statement, 0)}
+		program = &ast.Program{Statements: make([]ast.Statement, 0)}
 	}
 	if instructions == nil {
 		instructions = make(map[string]architecture.Instruction)
@@ -162,11 +163,11 @@ func (a *Analyser) Analyse() []SemanticError {
 func (a *Analyser) collect() {
 	for _, stmt := range a.program.Statements {
 		switch s := stmt.(type) {
-		case *LabelStmt:
+		case *ast.LabelStmt:
 			a.collectLabel(s)
-		case *NamespaceStmt:
+		case *ast.NamespaceStmt:
 			a.collectNamespace(s)
-		case *UseStmt:
+		case *ast.UseStmt:
 			a.collectUse(s)
 		}
 	}
@@ -187,7 +188,7 @@ func (a *Analyser) mapLine(line int) int {
 }
 
 // collectLabel adds a label to the label table or records a duplicate error.
-func (a *Analyser) collectLabel(s *LabelStmt) {
+func (a *Analyser) collectLabel(s *ast.LabelStmt) {
 	if prev, exists := a.labels[s.Name]; exists {
 		a.addError(
 			fmt.Sprintf("duplicate label '%s', previously declared at %d:%d", s.Name, a.mapLine(prev.Line), prev.Column),
@@ -199,7 +200,7 @@ func (a *Analyser) collectLabel(s *LabelStmt) {
 }
 
 // collectNamespace adds a namespace to the table or records a duplicate error.
-func (a *Analyser) collectNamespace(s *NamespaceStmt) {
+func (a *Analyser) collectNamespace(s *ast.NamespaceStmt) {
 	if prev, exists := a.namespaces[s.Name]; exists {
 		a.addError(
 			fmt.Sprintf("duplicate namespace '%s', previously declared at %d:%d", s.Name, a.mapLine(prev.Line), prev.Column),
@@ -211,7 +212,7 @@ func (a *Analyser) collectNamespace(s *NamespaceStmt) {
 }
 
 // collectUse adds a module import to the table or records a duplicate error.
-func (a *Analyser) collectUse(s *UseStmt) {
+func (a *Analyser) collectUse(s *ast.UseStmt) {
 	if prev, exists := a.modules[s.ModuleName]; exists {
 		a.addError(
 			fmt.Sprintf("duplicate use of module '%s', previously imported at %d:%d", s.ModuleName, a.mapLine(prev.Line), prev.Column),
@@ -230,15 +231,15 @@ func (a *Analyser) collectUse(s *UseStmt) {
 func (a *Analyser) validate() {
 	for _, stmt := range a.program.Statements {
 		switch s := stmt.(type) {
-		case *InstructionStmt:
+		case *ast.InstructionStmt:
 			a.validateInstruction(s)
-		case *LabelStmt:
+		case *ast.LabelStmt:
 			// Already validated during collection (duplicate check).
-		case *NamespaceStmt:
+		case *ast.NamespaceStmt:
 			a.validateNamespace(s)
-		case *UseStmt:
+		case *ast.UseStmt:
 			a.validateUse(s)
-		case *DirectiveStmt:
+		case *ast.DirectiveStmt:
 			a.validateDirective(s)
 		}
 	}
@@ -250,7 +251,7 @@ func (a *Analyser) validate() {
 
 // validateInstruction validates mnemonic, operand count, operand types,
 // immediate values, and memory operands.
-func (a *Analyser) validateInstruction(s *InstructionStmt) {
+func (a *Analyser) validateInstruction(s *ast.InstructionStmt) {
 	upper := strings.ToUpper(s.Mnemonic)
 
 	// FR-3.1: Mnemonic validation
@@ -269,7 +270,7 @@ func (a *Analyser) validateInstruction(s *InstructionStmt) {
 	// Validate individual operands (immediates, memory) regardless of variant matching.
 	a.validateOperands(s)
 
-	// FR-3.2 / FR-3.3: Operand count and type validation via variants.
+	// FR-3.2 / FR-3.3: ast.Operand count and type validation via variants.
 	if instr.HasVariants() {
 		a.validateVariantMatch(s, &instr)
 	}
@@ -277,14 +278,14 @@ func (a *Analyser) validateInstruction(s *InstructionStmt) {
 
 // validateOperands validates each operand in isolation (immediate values,
 // memory operands). Also checks identifier references against the label table.
-func (a *Analyser) validateOperands(s *InstructionStmt) {
+func (a *Analyser) validateOperands(s *ast.InstructionStmt) {
 	for _, op := range s.Operands {
 		switch o := op.(type) {
-		case *ImmediateOperand:
+		case *ast.ImmediateOperand:
 			a.validateImmediate(o)
-		case *MemoryOperand:
+		case *ast.MemoryOperand:
 			a.validateMemoryOperand(o)
-		case *IdentifierOperand:
+		case *ast.IdentifierOperand:
 			a.validateIdentifierReference(o)
 		}
 	}
@@ -292,7 +293,7 @@ func (a *Analyser) validateOperands(s *InstructionStmt) {
 
 // validateVariantMatch attempts to find a matching instruction variant for the
 // supplied operands. If no variant matches, an error is recorded.
-func (a *Analyser) validateVariantMatch(s *InstructionStmt, instr *architecture.Instruction) {
+func (a *Analyser) validateVariantMatch(s *ast.InstructionStmt, instr *architecture.Instruction) {
 	operandTypes := make([]string, len(s.Operands))
 	for i, op := range s.Operands {
 		operandTypes[i] = operandSemanticType(op)
@@ -327,18 +328,18 @@ func (a *Analyser) validateVariantMatch(s *InstructionStmt, instr *architecture.
 	}
 }
 
-// operandSemanticType maps an AST Operand node to its semantic type string.
-func operandSemanticType(op Operand) string {
+// operandSemanticType maps an AST ast.Operand node to its semantic type string.
+func operandSemanticType(op ast.Operand) string {
 	switch op.(type) {
-	case *RegisterOperand:
+	case *ast.RegisterOperand:
 		return "register"
-	case *ImmediateOperand:
+	case *ast.ImmediateOperand:
 		return "immediate"
-	case *MemoryOperand:
+	case *ast.MemoryOperand:
 		return "memory"
-	case *IdentifierOperand:
+	case *ast.IdentifierOperand:
 		return "identifier"
-	case *StringOperand:
+	case *ast.StringOperand:
 		return "string"
 	default:
 		return "unknown"
@@ -417,7 +418,7 @@ func (a *Analyser) variantOperandCounts(instr *architecture.Instruction) string 
 // ---------------------------------------------------------------------------
 
 // validateIdentifierReference checks an identifier operand against the label table.
-func (a *Analyser) validateIdentifierReference(o *IdentifierOperand) {
+func (a *Analyser) validateIdentifierReference(o *ast.IdentifierOperand) {
 	if _, exists := a.labels[o.Name]; exists {
 		return // Resolved to a label.
 	}
@@ -434,7 +435,7 @@ func (a *Analyser) validateIdentifierReference(o *IdentifierOperand) {
 // ---------------------------------------------------------------------------
 
 // validateNamespace performs defence-in-depth checks on a namespace statement.
-func (a *Analyser) validateNamespace(s *NamespaceStmt) {
+func (a *Analyser) validateNamespace(s *ast.NamespaceStmt) {
 	if s.Name == "" {
 		a.addError("namespace name must not be empty", s.Line, s.Column)
 		return
@@ -452,7 +453,7 @@ func (a *Analyser) validateNamespace(s *NamespaceStmt) {
 // ---------------------------------------------------------------------------
 
 // validateUse performs defence-in-depth checks on a use statement.
-func (a *Analyser) validateUse(s *UseStmt) {
+func (a *Analyser) validateUse(s *ast.UseStmt) {
 	if s.ModuleName == "" {
 		a.addError("module name must not be empty", s.Line, s.Column)
 	}
@@ -463,7 +464,7 @@ func (a *Analyser) validateUse(s *UseStmt) {
 // ---------------------------------------------------------------------------
 
 // validateDirective checks that a surviving directive is recognised.
-func (a *Analyser) validateDirective(s *DirectiveStmt) {
+func (a *Analyser) validateDirective(s *ast.DirectiveStmt) {
 	// Currently no post-pre-processing directives are defined.
 	// All surviving directives are unrecognised.
 	a.addError(
@@ -477,7 +478,7 @@ func (a *Analyser) validateDirective(s *DirectiveStmt) {
 // ---------------------------------------------------------------------------
 
 // validateImmediate checks that an immediate operand is a valid numeric literal.
-func (a *Analyser) validateImmediate(o *ImmediateOperand) {
+func (a *Analyser) validateImmediate(o *ast.ImmediateOperand) {
 	val := o.Value
 	if val == "" {
 		a.addError("invalid immediate value ''", o.Line, o.Column)
@@ -528,7 +529,7 @@ func isHexRune(r rune) bool {
 // ---------------------------------------------------------------------------
 
 // validateMemoryOperand validates the structure of a memory operand.
-func (a *Analyser) validateMemoryOperand(o *MemoryOperand) {
+func (a *Analyser) validateMemoryOperand(o *ast.MemoryOperand) {
 	// FR-9.1: Must contain at least one component.
 	if len(o.Components) == 0 {
 		a.addError("empty memory operand", o.Line, o.Column)

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/keurnel/assembler/internal/debugcontext"
+	"github.com/keurnel/assembler/v0/kasm/ast"
 	"github.com/keurnel/assembler/v0/architecture"
 )
 
@@ -29,12 +30,12 @@ func (e CodegenError) String() string {
 // Generator (FR-1)
 // ---------------------------------------------------------------------------
 
-// Generator transforms a validated *Program AST into a flat byte slice of
+// Generator transforms a validated *ast.Program AST into a flat byte slice of
 // machine code for the target architecture. If a Generator value exists, it
 // is guaranteed to hold a valid program reference and initialised internal
 // state.
 type Generator struct {
-	program      *Program
+	program      *ast.Program
 	instructions map[string]architecture.Instruction
 	labels       map[string]labelEntry
 	sections     map[string]*sectionBuffer
@@ -43,13 +44,13 @@ type Generator struct {
 	debugCtx     *debugcontext.DebugContext
 }
 
-// GeneratorNew is the sole constructor. It accepts the validated *Program AST
+// GeneratorNew is the sole constructor. It accepts the validated *ast.Program AST
 // and an instruction lookup table (upper-case mnemonic keys), and returns a
 // *Generator ready for Generate() to be called. GeneratorNew is infallible —
 // it cannot fail. A nil program is treated as empty (FR-1.2).
-func GeneratorNew(program *Program, instructions map[string]architecture.Instruction) *Generator {
+func GeneratorNew(program *ast.Program, instructions map[string]architecture.Instruction) *Generator {
 	if program == nil {
-		program = &Program{Statements: make([]Statement, 0)}
+		program = &ast.Program{Statements: make([]ast.Statement, 0)}
 	}
 	if instructions == nil {
 		instructions = make(map[string]architecture.Instruction)
@@ -139,14 +140,14 @@ func (g *Generator) Generate() ([]byte, []CodegenError) {
 func (g *Generator) collectPass() {
 	for _, stmt := range g.program.Statements {
 		switch s := stmt.(type) {
-		case *SectionStmt:
+		case *ast.SectionStmt:
 			g.switchSection(s.Type)
 
-		case *LabelStmt:
+		case *ast.LabelStmt:
 			g.ensureSection(s.Line, s.Column)
 			g.collectLabel(s)
 
-		case *InstructionStmt:
+		case *ast.InstructionStmt:
 			g.ensureSection(s.Line, s.Column)
 			size := g.computeInstructionSize(s)
 			sec := g.currentSection()
@@ -174,14 +175,14 @@ func (g *Generator) emitPass() {
 
 	for _, stmt := range g.program.Statements {
 		switch s := stmt.(type) {
-		case *SectionStmt:
+		case *ast.SectionStmt:
 			g.switchSection(s.Type)
 
-		case *LabelStmt:
+		case *ast.LabelStmt:
 			g.ensureSection(s.Line, s.Column)
 			// Labels are already collected; nothing to emit.
 
-		case *InstructionStmt:
+		case *ast.InstructionStmt:
 			g.ensureSection(s.Line, s.Column)
 			g.encodeInstruction(s)
 		}

@@ -5,6 +5,7 @@ import (
 
 	"github.com/keurnel/assembler/v0/architecture"
 	"github.com/keurnel/assembler/v0/kasm"
+	"github.com/keurnel/assembler/v0/kasm/ast"
 )
 
 // ---------------------------------------------------------------------------
@@ -23,7 +24,7 @@ func TestGeneratorNew_NilProgram(t *testing.T) {
 }
 
 func TestGeneratorNew_EmptyProgram(t *testing.T) {
-	program := &kasm.Program{Statements: []kasm.Statement{}}
+	program := &ast.Program{Statements: []ast.Statement{}}
 	gen := kasm.GeneratorNew(program, nil)
 	output, errors := gen.Generate()
 	if len(errors) != 0 {
@@ -52,13 +53,13 @@ func TestGenerate_DefaultTextSection(t *testing.T) {
 	// But our classifyOperand won't match — let's use a simple MOV reg, imm.
 	instrTable = movInstrTable()
 
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.InstructionStmt{
 				Mnemonic: "MOV",
-				Operands: []kasm.Operand{
-					&kasm.RegisterOperand{Name: "RAX", Line: 1, Column: 5},
-					&kasm.ImmediateOperand{Value: "42", Line: 1, Column: 10},
+				Operands: []ast.Operand{
+					&ast.RegisterOperand{Name: "RAX", Line: 1, Column: 5},
+					&ast.ImmediateOperand{Value: "42", Line: 1, Column: 10},
 				},
 				Line:   1,
 				Column: 1,
@@ -80,14 +81,14 @@ func TestGenerate_DefaultTextSection(t *testing.T) {
 func TestGenerate_ExplicitSection(t *testing.T) {
 	instrTable := movInstrTable()
 
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.SectionStmt{Type: ".text", Name: "code", Line: 1, Column: 1},
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.SectionStmt{Type: ".text", Name: "code", Line: 1, Column: 1},
+			&ast.InstructionStmt{
 				Mnemonic: "MOV",
-				Operands: []kasm.Operand{
-					&kasm.RegisterOperand{Name: "RAX", Line: 2, Column: 5},
-					&kasm.ImmediateOperand{Value: "1", Line: 2, Column: 10},
+				Operands: []ast.Operand{
+					&ast.RegisterOperand{Name: "RAX", Line: 2, Column: 5},
+					&ast.ImmediateOperand{Value: "1", Line: 2, Column: 10},
 				},
 				Line:   2,
 				Column: 1,
@@ -113,20 +114,20 @@ func TestGenerate_ExplicitSection(t *testing.T) {
 func TestGenerate_DuplicateLabel(t *testing.T) {
 	instrTable := movInstrTable()
 
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.SectionStmt{Type: ".text", Name: "code", Line: 1, Column: 1},
-			&kasm.LabelStmt{Name: "start", Line: 2, Column: 1},
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.SectionStmt{Type: ".text", Name: "code", Line: 1, Column: 1},
+			&ast.LabelStmt{Name: "start", Line: 2, Column: 1},
+			&ast.InstructionStmt{
 				Mnemonic: "MOV",
-				Operands: []kasm.Operand{
-					&kasm.RegisterOperand{Name: "RAX", Line: 3, Column: 5},
-					&kasm.ImmediateOperand{Value: "1", Line: 3, Column: 10},
+				Operands: []ast.Operand{
+					&ast.RegisterOperand{Name: "RAX", Line: 3, Column: 5},
+					&ast.ImmediateOperand{Value: "1", Line: 3, Column: 10},
 				},
 				Line:   3,
 				Column: 1,
 			},
-			&kasm.LabelStmt{Name: "start", Line: 4, Column: 1}, // duplicate
+			&ast.LabelStmt{Name: "start", Line: 4, Column: 1}, // duplicate
 		},
 	}
 
@@ -144,13 +145,13 @@ func TestGenerate_DuplicateLabel(t *testing.T) {
 func TestGenerate_UnresolvedLabel(t *testing.T) {
 	instrTable := jmpInstrTable()
 
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.SectionStmt{Type: ".text", Name: "code", Line: 1, Column: 1},
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.SectionStmt{Type: ".text", Name: "code", Line: 1, Column: 1},
+			&ast.InstructionStmt{
 				Mnemonic: "JMP",
-				Operands: []kasm.Operand{
-					&kasm.IdentifierOperand{Name: "nonexistent", Line: 2, Column: 5},
+				Operands: []ast.Operand{
+					&ast.IdentifierOperand{Name: "nonexistent", Line: 2, Column: 5},
 				},
 				Line:   2,
 				Column: 1,
@@ -178,11 +179,11 @@ func TestGenerate_UnresolvedLabel(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestGenerate_UnknownInstruction(t *testing.T) {
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.InstructionStmt{
 				Mnemonic: "FAKEINSTR",
-				Operands: []kasm.Operand{},
+				Operands: []ast.Operand{},
 				Line:     1,
 				Column:   1,
 			},
@@ -201,13 +202,13 @@ func TestGenerate_NoMatchingVariant(t *testing.T) {
 	instrTable := movInstrTable()
 
 	// MOV with two immediates — no variant should match.
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.InstructionStmt{
 				Mnemonic: "MOV",
-				Operands: []kasm.Operand{
-					&kasm.ImmediateOperand{Value: "1", Line: 1, Column: 5},
-					&kasm.ImmediateOperand{Value: "2", Line: 1, Column: 10},
+				Operands: []ast.Operand{
+					&ast.ImmediateOperand{Value: "1", Line: 1, Column: 5},
+					&ast.ImmediateOperand{Value: "2", Line: 1, Column: 10},
 				},
 				Line:   1,
 				Column: 1,
@@ -226,13 +227,13 @@ func TestGenerate_NoMatchingVariant(t *testing.T) {
 func TestGenerate_MOV_RegisterRegister(t *testing.T) {
 	instrTable := movInstrTable()
 
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.InstructionStmt{
 				Mnemonic: "MOV",
-				Operands: []kasm.Operand{
-					&kasm.RegisterOperand{Name: "RAX", Line: 1, Column: 5},
-					&kasm.RegisterOperand{Name: "RBX", Line: 1, Column: 10},
+				Operands: []ast.Operand{
+					&ast.RegisterOperand{Name: "RAX", Line: 1, Column: 5},
+					&ast.RegisterOperand{Name: "RBX", Line: 1, Column: 10},
 				},
 				Line:   1,
 				Column: 1,
@@ -266,13 +267,13 @@ func TestGenerate_MOV_RegisterRegister(t *testing.T) {
 func TestGenerate_MOV_RegisterImmediate(t *testing.T) {
 	instrTable := movInstrTable()
 
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.InstructionStmt{
 				Mnemonic: "MOV",
-				Operands: []kasm.Operand{
-					&kasm.RegisterOperand{Name: "RAX", Line: 1, Column: 5},
-					&kasm.ImmediateOperand{Value: "42", Line: 1, Column: 10},
+				Operands: []ast.Operand{
+					&ast.RegisterOperand{Name: "RAX", Line: 1, Column: 5},
+					&ast.ImmediateOperand{Value: "42", Line: 1, Column: 10},
 				},
 				Line:   1,
 				Column: 1,
@@ -307,13 +308,13 @@ func TestGenerate_MOV_RegisterImmediate(t *testing.T) {
 func TestGenerate_ImmediateHex(t *testing.T) {
 	instrTable := movInstrTable()
 
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.InstructionStmt{
 				Mnemonic: "MOV",
-				Operands: []kasm.Operand{
-					&kasm.RegisterOperand{Name: "RAX", Line: 1, Column: 5},
-					&kasm.ImmediateOperand{Value: "0xFF", Line: 1, Column: 10},
+				Operands: []ast.Operand{
+					&ast.RegisterOperand{Name: "RAX", Line: 1, Column: 5},
+					&ast.ImmediateOperand{Value: "0xFF", Line: 1, Column: 10},
 				},
 				Line:   1,
 				Column: 1,
@@ -332,13 +333,13 @@ func TestGenerate_ImmediateHex(t *testing.T) {
 func TestGenerate_ImmediateBinary(t *testing.T) {
 	instrTable := movInstrTable()
 
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.InstructionStmt{
 				Mnemonic: "MOV",
-				Operands: []kasm.Operand{
-					&kasm.RegisterOperand{Name: "RAX", Line: 1, Column: 5},
-					&kasm.ImmediateOperand{Value: "0b1010", Line: 1, Column: 10},
+				Operands: []ast.Operand{
+					&ast.RegisterOperand{Name: "RAX", Line: 1, Column: 5},
+					&ast.ImmediateOperand{Value: "0b1010", Line: 1, Column: 10},
 				},
 				Line:   1,
 				Column: 1,
@@ -357,13 +358,13 @@ func TestGenerate_ImmediateBinary(t *testing.T) {
 func TestGenerate_ImmediateInvalid(t *testing.T) {
 	instrTable := movInstrTable()
 
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.InstructionStmt{
 				Mnemonic: "MOV",
-				Operands: []kasm.Operand{
-					&kasm.RegisterOperand{Name: "RAX", Line: 1, Column: 5},
-					&kasm.ImmediateOperand{Value: "notanumber", Line: 1, Column: 10},
+				Operands: []ast.Operand{
+					&ast.RegisterOperand{Name: "RAX", Line: 1, Column: 5},
+					&ast.ImmediateOperand{Value: "notanumber", Line: 1, Column: 10},
 				},
 				Line:   1,
 				Column: 1,
@@ -387,13 +388,13 @@ func TestGenerate_REX_ExtendedRegister(t *testing.T) {
 	instrTable := movInstrTable()
 
 	// MOV R8, RAX — R8 is an extended register, requires REX.B.
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.InstructionStmt{
 				Mnemonic: "MOV",
-				Operands: []kasm.Operand{
-					&kasm.RegisterOperand{Name: "R8", Line: 1, Column: 5},
-					&kasm.RegisterOperand{Name: "RAX", Line: 1, Column: 9},
+				Operands: []ast.Operand{
+					&ast.RegisterOperand{Name: "R8", Line: 1, Column: 5},
+					&ast.RegisterOperand{Name: "RAX", Line: 1, Column: 9},
 				},
 				Line:   1,
 				Column: 1,
@@ -424,22 +425,22 @@ func TestGenerate_REX_ExtendedRegister(t *testing.T) {
 func TestGenerate_MultipleInstructions(t *testing.T) {
 	instrTable := movInstrTable()
 
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.InstructionStmt{
 				Mnemonic: "MOV",
-				Operands: []kasm.Operand{
-					&kasm.RegisterOperand{Name: "RAX", Line: 1, Column: 5},
-					&kasm.ImmediateOperand{Value: "1", Line: 1, Column: 10},
+				Operands: []ast.Operand{
+					&ast.RegisterOperand{Name: "RAX", Line: 1, Column: 5},
+					&ast.ImmediateOperand{Value: "1", Line: 1, Column: 10},
 				},
 				Line:   1,
 				Column: 1,
 			},
-			&kasm.InstructionStmt{
+			&ast.InstructionStmt{
 				Mnemonic: "MOV",
-				Operands: []kasm.Operand{
-					&kasm.RegisterOperand{Name: "RBX", Line: 2, Column: 5},
-					&kasm.ImmediateOperand{Value: "2", Line: 2, Column: 10},
+				Operands: []ast.Operand{
+					&ast.RegisterOperand{Name: "RBX", Line: 2, Column: 5},
+					&ast.ImmediateOperand{Value: "2", Line: 2, Column: 10},
 				},
 				Line:   2,
 				Column: 1,

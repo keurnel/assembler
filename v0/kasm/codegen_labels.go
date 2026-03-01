@@ -1,6 +1,10 @@
 package kasm
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/keurnel/assembler/v0/kasm/ast"
+)
 
 // ---------------------------------------------------------------------------
 // Internal types (FR-4, labelEntry)
@@ -22,7 +26,7 @@ type labelEntry struct {
 // collectLabel records a label declaration and its current byte offset within
 // the active section. Duplicate labels within the same section produce a
 // CodegenError (FR-4.1).
-func (g *Generator) collectLabel(s *LabelStmt) {
+func (g *Generator) collectLabel(s *ast.LabelStmt) {
 	sec := g.currentSection()
 	if sec == nil {
 		return

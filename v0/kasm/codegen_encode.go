@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/keurnel/assembler/v0/architecture"
+	"github.com/keurnel/assembler/v0/kasm/ast"
 )
 
 // ---------------------------------------------------------------------------
@@ -38,19 +39,19 @@ func isExtendedRegister(name string) bool {
 }
 
 // ---------------------------------------------------------------------------
-// Operand classification (FR-5.2)
+// ast.Operand classification (FR-5.2)
 // ---------------------------------------------------------------------------
 
 // classifyOperand returns the operand-type string used for variant lookup.
-func classifyOperand(op Operand) string {
+func classifyOperand(op ast.Operand) string {
 	switch op.(type) {
-	case *RegisterOperand:
+	case *ast.RegisterOperand:
 		return "register"
-	case *ImmediateOperand:
+	case *ast.ImmediateOperand:
 		return "immediate"
-	case *MemoryOperand:
+	case *ast.MemoryOperand:
 		return "memory"
-	case *IdentifierOperand:
+	case *ast.IdentifierOperand:
 		// Identifiers are label references; they resolve to relative offsets
 		// at encoding time. Treated as "relative" for variant matching.
 		return "relative"
@@ -66,7 +67,7 @@ func classifyOperand(op Operand) string {
 // computeInstructionSize determines how many bytes an instruction will occupy
 // without actually emitting bytes. This is used in Pass 1 to compute label
 // offsets (FR-2.1).
-func (g *Generator) computeInstructionSize(s *InstructionStmt) int {
+func (g *Generator) computeInstructionSize(s *ast.InstructionStmt) int {
 	mnemonic := strings.ToUpper(s.Mnemonic)
 	instr, exists := g.instructions[mnemonic]
 	if !exists {
@@ -99,10 +100,10 @@ func (g *Generator) computeInstructionSize(s *InstructionStmt) int {
 // Instruction encoding (Pass 2 — FR-5)
 // ---------------------------------------------------------------------------
 
-// encodeInstruction encodes a single InstructionStmt into bytes and appends
+// encodeInstruction encodes a single ast.InstructionStmt into bytes and appends
 // them to the current section buffer. Errors are recorded via addError
 // (AR-4.3).
-func (g *Generator) encodeInstruction(s *InstructionStmt) {
+func (g *Generator) encodeInstruction(s *ast.InstructionStmt) {
 	sec := g.currentSection()
 	if sec == nil {
 		return
@@ -166,12 +167,12 @@ func (g *Generator) encodeInstruction(s *InstructionStmt) {
 }
 
 // ---------------------------------------------------------------------------
-// Operand encoding
+// ast.Operand encoding
 // ---------------------------------------------------------------------------
 
 // encodeOperands encodes the operands of an instruction according to the
 // variant's encoding scheme.
-func (g *Generator) encodeOperands(s *InstructionStmt, variant *InstructionVariant) []byte {
+func (g *Generator) encodeOperands(s *ast.InstructionStmt, variant *InstructionVariant) []byte {
 	switch variant.Encoding {
 	case "RM":
 		return g.encodeRM(s)
@@ -194,7 +195,7 @@ func (g *Generator) encodeOperands(s *InstructionStmt, variant *InstructionVaria
 
 // encodeRM encodes a register-to-register/memory instruction (e.g. MOV r/m64, r64).
 // ModR/M byte: mod=11 (register-direct), reg=source, r/m=destination.
-func (g *Generator) encodeRM(s *InstructionStmt) []byte {
+func (g *Generator) encodeRM(s *ast.InstructionStmt) []byte {
 	if len(s.Operands) < 2 {
 		return nil
 	}
@@ -210,7 +211,7 @@ func (g *Generator) encodeRM(s *InstructionStmt) []byte {
 
 // encodeMR encodes a memory/register-to-register instruction.
 // ModR/M byte: mod=11 (register-direct), reg=destination, r/m=source.
-func (g *Generator) encodeMR(s *InstructionStmt) []byte {
+func (g *Generator) encodeMR(s *ast.InstructionStmt) []byte {
 	if len(s.Operands) < 2 {
 		return nil
 	}
@@ -228,7 +229,7 @@ func (g *Generator) encodeMR(s *InstructionStmt) []byte {
 // The register is encoded in the low 3 bits of the opcode (already handled
 // by variant selection); the immediate follows as a 4-byte little-endian
 // value.
-func (g *Generator) encodeRI(s *InstructionStmt) []byte {
+func (g *Generator) encodeRI(s *ast.InstructionStmt) []byte {
 	if len(s.Operands) < 2 {
 		return nil
 	}
@@ -257,14 +258,14 @@ func (g *Generator) encodeRI(s *InstructionStmt) []byte {
 
 // encodeRelative encodes a relative jump/call operand (e.g. JMP label).
 // The operand is a 4-byte signed relative offset.
-func (g *Generator) encodeRelative(s *InstructionStmt) []byte {
+func (g *Generator) encodeRelative(s *ast.InstructionStmt) []byte {
 	if len(s.Operands) < 1 {
 		return nil
 	}
 
 	var targetOffset int
 	switch op := s.Operands[0].(type) {
-	case *IdentifierOperand:
+	case *ast.IdentifierOperand:
 		resolved, ok := g.resolveLabel(op.Name, op.Line, op.Column)
 		if !ok {
 			return make([]byte, 4) // placeholder
@@ -273,7 +274,7 @@ func (g *Generator) encodeRelative(s *InstructionStmt) []byte {
 		sec := g.currentSection()
 		currentPos := len(sec.data) + 4 // +4 for the 4-byte offset itself
 		targetOffset = resolved - currentPos
-	case *ImmediateOperand:
+	case *ast.ImmediateOperand:
 		val, ok := g.parseImmediate(s.Operands[0], s.Line, s.Column)
 		if !ok {
 			return make([]byte, 4)
@@ -294,7 +295,7 @@ func (g *Generator) encodeRelative(s *InstructionStmt) []byte {
 
 // encodeFar encodes a far jump/call operand. For now, treated the same as
 // relative — a 4-byte offset.
-func (g *Generator) encodeFar(s *InstructionStmt) []byte {
+func (g *Generator) encodeFar(s *ast.InstructionStmt) []byte {
 	return g.encodeRelative(s)
 }
 
@@ -302,10 +303,10 @@ func (g *Generator) encodeFar(s *InstructionStmt) []byte {
 // Register encoding helper
 // ---------------------------------------------------------------------------
 
-// encodeRegOperand extracts the register number from a RegisterOperand.
+// encodeRegOperand extracts the register number from a ast.RegisterOperand.
 // Returns -1 and records an error if the operand is not a register.
-func (g *Generator) encodeRegOperand(op Operand, line, column int) int {
-	reg, ok := op.(*RegisterOperand)
+func (g *Generator) encodeRegOperand(op ast.Operand, line, column int) int {
+	reg, ok := op.(*ast.RegisterOperand)
 	if !ok {
 		g.addError(
 			fmt.Sprintf("expected register operand, got %T", op),
@@ -331,8 +332,8 @@ func (g *Generator) encodeRegOperand(op Operand, line, column int) int {
 
 // parseImmediate extracts and parses an immediate value from an operand.
 // Supports decimal, hexadecimal (0x), and binary (0b) formats.
-func (g *Generator) parseImmediate(op Operand, line, column int) (int64, bool) {
-	imm, ok := op.(*ImmediateOperand)
+func (g *Generator) parseImmediate(op ast.Operand, line, column int) (int64, bool) {
+	imm, ok := op.(*ast.ImmediateOperand)
 	if !ok {
 		g.addError(
 			fmt.Sprintf("expected immediate operand, got %T", op),
@@ -387,9 +388,9 @@ func (g *Generator) parseImmediate(op Operand, line, column int) (int64, bool) {
 
 // needsREX returns true if any operand of the instruction references a
 // 64-bit register, requiring a REX prefix (FR-6.1).
-func (g *Generator) needsREX(s *InstructionStmt) bool {
+func (g *Generator) needsREX(s *ast.InstructionStmt) bool {
 	for _, op := range s.Operands {
-		if reg, ok := op.(*RegisterOperand); ok {
+		if reg, ok := op.(*ast.RegisterOperand); ok {
 			if is64BitRegister(reg.Name) {
 				return true
 			}
@@ -399,7 +400,7 @@ func (g *Generator) needsREX(s *InstructionStmt) bool {
 }
 
 // buildREX constructs the REX prefix byte for the given instruction (FR-6.2–6.4).
-func (g *Generator) buildREX(s *InstructionStmt) byte {
+func (g *Generator) buildREX(s *ast.InstructionStmt) byte {
 	// Base REX prefix: 0100 WRXB
 	rex := byte(0x40)
 
@@ -408,7 +409,7 @@ func (g *Generator) buildREX(s *InstructionStmt) byte {
 
 	if len(s.Operands) >= 2 {
 		// FR-6.3: REX.R — extended register in ModR/M reg field (second operand for RM).
-		if reg, ok := s.Operands[1].(*RegisterOperand); ok {
+		if reg, ok := s.Operands[1].(*ast.RegisterOperand); ok {
 			if isExtendedRegister(reg.Name) {
 				rex |= 0x04
 			}
@@ -417,7 +418,7 @@ func (g *Generator) buildREX(s *InstructionStmt) byte {
 
 	if len(s.Operands) >= 1 {
 		// FR-6.4: REX.B — extended register in ModR/M r/m field (first operand).
-		if reg, ok := s.Operands[0].(*RegisterOperand); ok {
+		if reg, ok := s.Operands[0].(*ast.RegisterOperand); ok {
 			if isExtendedRegister(reg.Name) {
 				rex |= 0x01
 			}

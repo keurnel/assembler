@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/keurnel/assembler/internal/debugcontext"
+	"github.com/keurnel/assembler/v0/kasm/ast"
 )
 
 // Parser holds the token slice, current position, and accumulated errors.
@@ -154,15 +155,15 @@ func (p *Parser) recover() {
 // ---------------------------------------------------------------------------
 
 // Parse performs a single left-to-right pass over the token slice and returns
-// a *Program AST and a slice of ParseError values. It is the sole public
+// a *ast.Program AST and a slice of ParseError values. It is the sole public
 // method that drives parsing.
-func (p *Parser) Parse() (*Program, []ParseError) {
+func (p *Parser) Parse() (*ast.Program, []ParseError) {
 	if p.debugCtx != nil {
 		p.debugCtx.SetPhase("parser")
 	}
 
-	program := &Program{
-		Statements: make([]Statement, 0),
+	program := &ast.Program{
+		Statements: make([]ast.Statement, 0),
 	}
 
 	for !p.isAtEnd() {
@@ -184,12 +185,12 @@ func (p *Parser) Parse() (*Program, []ParseError) {
 }
 
 // ---------------------------------------------------------------------------
-// Statement dispatch (FR-6)
+// ast.Statement dispatch (FR-6)
 // ---------------------------------------------------------------------------
 
 // parseStatement inspects the current token's type to determine which parsing
 // method to invoke. Returns nil if recovery consumed the token instead.
-func (p *Parser) parseStatement() Statement {
+func (p *Parser) parseStatement() ast.Statement {
 	tok := p.current()
 
 	switch tok.Type {
@@ -242,17 +243,17 @@ func (p *Parser) parseStatement() Statement {
 
 // parseInstruction parses a TokenInstruction followed by zero or more operands
 // separated by commas. If the mnemonic is "use", it delegates to parseUse.
-func (p *Parser) parseInstruction() Statement {
+func (p *Parser) parseInstruction() ast.Statement {
 	tok := p.advance()
 
-	// FR-7.6: delegate "use" to UseStmt parsing.
+	// FR-7.6: delegate "use" to ast.UseStmt parsing.
 	if strings.EqualFold(tok.Literal, "use") {
 		return p.parseUse(tok)
 	}
 
 	operands := p.parseOperandList()
 
-	return &InstructionStmt{
+	return &ast.InstructionStmt{
 		Mnemonic: tok.Literal,
 		Operands: operands,
 		Line:     tok.Line,
@@ -263,8 +264,8 @@ func (p *Parser) parseInstruction() Statement {
 // parseOperandList collects zero or more operands separated by commas.
 // Parsing continues until a token is encountered that cannot be an operand
 // or a comma (i.e. the start of the next statement or end of input).
-func (p *Parser) parseOperandList() []Operand {
-	operands := make([]Operand, 0)
+func (p *Parser) parseOperandList() []ast.Operand {
+	operands := make([]ast.Operand, 0)
 
 	for !p.isAtEnd() {
 		tok := p.current()
@@ -291,21 +292,21 @@ func (p *Parser) parseOperandList() []Operand {
 
 // parseOperand parses a single operand based on the current token type.
 // Returns nil if the current token cannot be an operand.
-func (p *Parser) parseOperand() Operand {
+func (p *Parser) parseOperand() ast.Operand {
 	tok := p.current()
 
 	switch tok.Type {
 	case TokenRegister:
 		p.advance()
-		return &RegisterOperand{Name: tok.Literal, Line: tok.Line, Column: tok.Column}
+		return &ast.RegisterOperand{Name: tok.Literal, Line: tok.Line, Column: tok.Column}
 
 	case TokenImmediate:
 		p.advance()
-		return &ImmediateOperand{Value: tok.Literal, Line: tok.Line, Column: tok.Column}
+		return &ast.ImmediateOperand{Value: tok.Literal, Line: tok.Line, Column: tok.Column}
 
 	case TokenString:
 		p.advance()
-		return &StringOperand{Value: tok.Literal, Line: tok.Line, Column: tok.Column}
+		return &ast.StringOperand{Value: tok.Literal, Line: tok.Line, Column: tok.Column}
 
 	case TokenIdentifier:
 		// Opening bracket → memory operand.
@@ -317,7 +318,7 @@ func (p *Parser) parseOperand() Operand {
 			return nil
 		}
 		p.advance()
-		return &IdentifierOperand{Name: tok.Literal, Line: tok.Line, Column: tok.Column}
+		return &ast.IdentifierOperand{Name: tok.Literal, Line: tok.Line, Column: tok.Column}
 
 	default:
 		return nil
@@ -326,9 +327,9 @@ func (p *Parser) parseOperand() Operand {
 
 // parseMemoryOperand parses a memory reference enclosed in [ and ].
 // The opening '[' must be the current token.
-func (p *Parser) parseMemoryOperand() Operand {
+func (p *Parser) parseMemoryOperand() ast.Operand {
 	openBracket := p.advance() // consume '['
-	components := make([]MemoryComponent, 0)
+	components := make([]ast.MemoryComponent, 0)
 
 	for !p.isAtEnd() {
 		tok := p.current()
@@ -336,7 +337,7 @@ func (p *Parser) parseMemoryOperand() Operand {
 		// Closing bracket — consume and return.
 		if tok.Type == TokenIdentifier && tok.Literal == "]" {
 			p.advance()
-			return &MemoryOperand{
+			return &ast.MemoryOperand{
 				Components: components,
 				Line:       openBracket.Line,
 				Column:     openBracket.Column,
@@ -349,13 +350,13 @@ func (p *Parser) parseMemoryOperand() Operand {
 		}
 
 		// Collect the component.
-		components = append(components, MemoryComponent{Token: tok})
+		components = append(components, ast.MemoryComponent{Token: tok})
 		p.advance()
 	}
 
 	// Unterminated '[' — record error and return what we have.
 	p.addError("unterminated memory operand, expected ']'", openBracket.Line, openBracket.Column)
-	return &MemoryOperand{
+	return &ast.MemoryOperand{
 		Components: components,
 		Line:       openBracket.Line,
 		Column:     openBracket.Column,
@@ -367,11 +368,11 @@ func (p *Parser) parseMemoryOperand() Operand {
 // ---------------------------------------------------------------------------
 
 // parseLabel parses a TokenIdentifier whose literal ends with ':'.
-func (p *Parser) parseLabel() Statement {
+func (p *Parser) parseLabel() ast.Statement {
 	tok := p.advance()
 	// Strip the trailing ':' to produce the semantic label name.
 	name := tok.Literal[:len(tok.Literal)-1]
-	return &LabelStmt{
+	return &ast.LabelStmt{
 		Name:   name,
 		Line:   tok.Line,
 		Column: tok.Column,
@@ -383,7 +384,7 @@ func (p *Parser) parseLabel() Statement {
 // ---------------------------------------------------------------------------
 
 // parseKeyword dispatches by keyword literal.
-func (p *Parser) parseKeyword() Statement {
+func (p *Parser) parseKeyword() ast.Statement {
 	tok := p.current()
 
 	if strings.EqualFold(tok.Literal, "namespace") {
@@ -401,7 +402,7 @@ func (p *Parser) parseKeyword() Statement {
 // ---------------------------------------------------------------------------
 
 // parseNamespace parses a `namespace` keyword followed by an identifier.
-func (p *Parser) parseNamespace() Statement {
+func (p *Parser) parseNamespace() ast.Statement {
 	kwTok := p.advance() // consume 'namespace' keyword
 
 	if p.isAtEnd() {
@@ -415,7 +416,7 @@ func (p *Parser) parseNamespace() Statement {
 		return nil
 	}
 
-	return &NamespaceStmt{
+	return &ast.NamespaceStmt{
 		Name:   nameTok.Literal,
 		Line:   kwTok.Line,
 		Column: kwTok.Column,
@@ -428,7 +429,7 @@ func (p *Parser) parseNamespace() Statement {
 
 // parseUse parses a `use` instruction followed by a module name identifier.
 // The `use` token has already been consumed by the caller.
-func (p *Parser) parseUse(useTok Token) Statement {
+func (p *Parser) parseUse(useTok Token) ast.Statement {
 	if p.isAtEnd() {
 		p.addError("expected module name after 'use', got end of input", useTok.Line, useTok.Column)
 		return nil
@@ -440,7 +441,7 @@ func (p *Parser) parseUse(useTok Token) Statement {
 		return nil
 	}
 
-	return &UseStmt{
+	return &ast.UseStmt{
 		ModuleName: nameTok.Literal,
 		Line:       useTok.Line,
 		Column:     useTok.Column,
@@ -453,7 +454,7 @@ func (p *Parser) parseUse(useTok Token) Statement {
 
 // parseDirective parses a TokenDirective and collects any argument tokens
 // that follow on the same logical statement.
-func (p *Parser) parseDirective() Statement {
+func (p *Parser) parseDirective() ast.Statement {
 	dirTok := p.advance() // consume the directive
 
 	args := make([]Token, 0)
@@ -471,7 +472,7 @@ func (p *Parser) parseDirective() Statement {
 		p.advance()
 	}
 
-	return &DirectiveStmt{
+	return &ast.DirectiveStmt{
 		Literal: dirTok.Literal,
 		Args:    args,
 		Line:    dirTok.Line,
@@ -486,7 +487,7 @@ func (p *Parser) parseDirective() Statement {
 // parseSection parses a TokenSection followed by a section type identifier and
 // a section name identifier. The trailing ':' on the section type is stripped,
 // consistent with label-name handling (FR-3.5.2, FR-12.4).
-func (p *Parser) parseSection() Statement {
+func (p *Parser) parseSection() ast.Statement {
 	secTok := p.advance() // consume 'section' token
 
 	// FR-12.2 / FR-12.3: expect section type.
@@ -519,7 +520,7 @@ func (p *Parser) parseSection() Statement {
 		return nil
 	}
 
-	return &SectionStmt{
+	return &ast.SectionStmt{
 		Type:   sectionType,
 		Name:   nameTok.Literal,
 		Line:   secTok.Line,

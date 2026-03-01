@@ -6,6 +6,7 @@ import (
 
 	"github.com/keurnel/assembler/v0/architecture"
 	"github.com/keurnel/assembler/v0/kasm"
+	"github.com/keurnel/assembler/v0/kasm/ast"
 	"github.com/keurnel/assembler/v0/kasm/profile"
 )
 
@@ -87,13 +88,13 @@ func TestAnalyserNew_NilProgram(t *testing.T) {
 }
 
 func TestAnalyserNew_EmptyProgram(t *testing.T) {
-	program := &kasm.Program{Statements: []kasm.Statement{}}
+	program := &ast.Program{Statements: []ast.Statement{}}
 	errors := kasm.AnalyserNew(program, minimalInstructions()).Analyse()
 	requireNoSemanticErrors(t, errors)
 }
 
 func TestAnalyserNew_NilInstructions(t *testing.T) {
-	program := &kasm.Program{Statements: []kasm.Statement{}}
+	program := &ast.Program{Statements: []ast.Statement{}}
 	errors := kasm.AnalyserNew(program, nil).Analyse()
 	requireNoSemanticErrors(t, errors)
 }
@@ -103,13 +104,13 @@ func TestAnalyserNew_NilInstructions(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestAnalyse_KnownInstruction(t *testing.T) {
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.InstructionStmt{
 				Mnemonic: "mov",
-				Operands: []kasm.Operand{
-					&kasm.RegisterOperand{Name: "rax", Line: 1, Column: 5},
-					&kasm.RegisterOperand{Name: "rbx", Line: 1, Column: 10},
+				Operands: []ast.Operand{
+					&ast.RegisterOperand{Name: "rax", Line: 1, Column: 5},
+					&ast.RegisterOperand{Name: "rbx", Line: 1, Column: 10},
 				},
 				Line: 1, Column: 1,
 			},
@@ -120,11 +121,11 @@ func TestAnalyse_KnownInstruction(t *testing.T) {
 }
 
 func TestAnalyse_UnknownInstruction(t *testing.T) {
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.InstructionStmt{
 				Mnemonic: "foobar",
-				Operands: []kasm.Operand{},
+				Operands: []ast.Operand{},
 				Line:     1, Column: 1,
 			},
 		},
@@ -135,13 +136,13 @@ func TestAnalyse_UnknownInstruction(t *testing.T) {
 }
 
 func TestAnalyse_CaseInsensitiveMnemonic(t *testing.T) {
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.InstructionStmt{
 				Mnemonic: "Mov",
-				Operands: []kasm.Operand{
-					&kasm.RegisterOperand{Name: "rax", Line: 1, Column: 5},
-					&kasm.RegisterOperand{Name: "rbx", Line: 1, Column: 10},
+				Operands: []ast.Operand{
+					&ast.RegisterOperand{Name: "rax", Line: 1, Column: 5},
+					&ast.RegisterOperand{Name: "rbx", Line: 1, Column: 10},
 				},
 				Line: 1, Column: 1,
 			},
@@ -156,14 +157,14 @@ func TestAnalyse_CaseInsensitiveMnemonic(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestAnalyse_OperandCountMismatch(t *testing.T) {
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.InstructionStmt{
 				Mnemonic: "mov",
-				Operands: []kasm.Operand{
-					&kasm.RegisterOperand{Name: "rax", Line: 1, Column: 5},
-					&kasm.RegisterOperand{Name: "rbx", Line: 1, Column: 10},
-					&kasm.RegisterOperand{Name: "rcx", Line: 1, Column: 15},
+				Operands: []ast.Operand{
+					&ast.RegisterOperand{Name: "rax", Line: 1, Column: 5},
+					&ast.RegisterOperand{Name: "rbx", Line: 1, Column: 10},
+					&ast.RegisterOperand{Name: "rcx", Line: 1, Column: 15},
 				},
 				Line: 1, Column: 1,
 			},
@@ -176,11 +177,11 @@ func TestAnalyse_OperandCountMismatch(t *testing.T) {
 }
 
 func TestAnalyse_ZeroOperands_WhenVariantExpectsNone(t *testing.T) {
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.InstructionStmt{
 				Mnemonic: "ret",
-				Operands: []kasm.Operand{},
+				Operands: []ast.Operand{},
 				Line:     1, Column: 1,
 			},
 		},
@@ -190,11 +191,11 @@ func TestAnalyse_ZeroOperands_WhenVariantExpectsNone(t *testing.T) {
 }
 
 func TestAnalyse_OperandCountMismatch_ZeroGiven(t *testing.T) {
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.InstructionStmt{
 				Mnemonic: "mov",
-				Operands: []kasm.Operand{},
+				Operands: []ast.Operand{},
 				Line:     1, Column: 1,
 			},
 		},
@@ -207,12 +208,12 @@ func TestAnalyse_OperandCountMismatch_ZeroGiven(t *testing.T) {
 
 // FR-3.2.2: No variants — skip count validation.
 func TestAnalyse_InstructionWithoutVariants_SkipsValidation(t *testing.T) {
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.InstructionStmt{
 				Mnemonic: "syscall",
-				Operands: []kasm.Operand{
-					&kasm.RegisterOperand{Name: "rax", Line: 1, Column: 9},
+				Operands: []ast.Operand{
+					&ast.RegisterOperand{Name: "rax", Line: 1, Column: 9},
 				},
 				Line: 1, Column: 1,
 			},
@@ -228,13 +229,13 @@ func TestAnalyse_InstructionWithoutVariants_SkipsValidation(t *testing.T) {
 
 func TestAnalyse_OperandTypeMismatch(t *testing.T) {
 	// mov takes (register,register) or (register,immediate), not (immediate,immediate)
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.InstructionStmt{
 				Mnemonic: "mov",
-				Operands: []kasm.Operand{
-					&kasm.ImmediateOperand{Value: "1", Line: 1, Column: 5},
-					&kasm.ImmediateOperand{Value: "2", Line: 1, Column: 8},
+				Operands: []ast.Operand{
+					&ast.ImmediateOperand{Value: "1", Line: 1, Column: 5},
+					&ast.ImmediateOperand{Value: "2", Line: 1, Column: 8},
 				},
 				Line: 1, Column: 1,
 			},
@@ -247,13 +248,13 @@ func TestAnalyse_OperandTypeMismatch(t *testing.T) {
 
 // FR-3.3.3: Identifier compatible with relative/far.
 func TestAnalyse_IdentifierAsJmpTarget(t *testing.T) {
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.LabelStmt{Name: "target", Line: 1, Column: 1},
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.LabelStmt{Name: "target", Line: 1, Column: 1},
+			&ast.InstructionStmt{
 				Mnemonic: "jmp",
-				Operands: []kasm.Operand{
-					&kasm.IdentifierOperand{Name: "target", Line: 2, Column: 5},
+				Operands: []ast.Operand{
+					&ast.IdentifierOperand{Name: "target", Line: 2, Column: 5},
 				},
 				Line: 2, Column: 1,
 			},
@@ -264,13 +265,13 @@ func TestAnalyse_IdentifierAsJmpTarget(t *testing.T) {
 }
 
 func TestAnalyse_ValidMovRegImm(t *testing.T) {
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.InstructionStmt{
 				Mnemonic: "mov",
-				Operands: []kasm.Operand{
-					&kasm.RegisterOperand{Name: "rax", Line: 1, Column: 5},
-					&kasm.ImmediateOperand{Value: "60", Line: 1, Column: 10},
+				Operands: []ast.Operand{
+					&ast.RegisterOperand{Name: "rax", Line: 1, Column: 5},
+					&ast.ImmediateOperand{Value: "60", Line: 1, Column: 10},
 				},
 				Line: 1, Column: 1,
 			},
@@ -285,10 +286,10 @@ func TestAnalyse_ValidMovRegImm(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestAnalyse_DuplicateLabel(t *testing.T) {
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.LabelStmt{Name: "_start", Line: 1, Column: 1},
-			&kasm.LabelStmt{Name: "_start", Line: 5, Column: 1},
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.LabelStmt{Name: "_start", Line: 1, Column: 1},
+			&ast.LabelStmt{Name: "_start", Line: 5, Column: 1},
 		},
 	}
 	errors := kasm.AnalyserNew(program, minimalInstructions()).Analyse()
@@ -298,10 +299,10 @@ func TestAnalyse_DuplicateLabel(t *testing.T) {
 }
 
 func TestAnalyse_UniqueLabels(t *testing.T) {
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.LabelStmt{Name: "_start", Line: 1, Column: 1},
-			&kasm.LabelStmt{Name: ".loop", Line: 3, Column: 1},
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.LabelStmt{Name: "_start", Line: 1, Column: 1},
+			&ast.LabelStmt{Name: ".loop", Line: 3, Column: 1},
 		},
 	}
 	errors := kasm.AnalyserNew(program, minimalInstructions()).Analyse()
@@ -310,12 +311,12 @@ func TestAnalyse_UniqueLabels(t *testing.T) {
 
 // FR-4.2: Undefined label reference.
 func TestAnalyse_UndefinedReference(t *testing.T) {
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.InstructionStmt{
 				Mnemonic: "jmp",
-				Operands: []kasm.Operand{
-					&kasm.IdentifierOperand{Name: "nonexistent", Line: 1, Column: 5},
+				Operands: []ast.Operand{
+					&ast.IdentifierOperand{Name: "nonexistent", Line: 1, Column: 5},
 				},
 				Line: 1, Column: 1,
 			},
@@ -332,16 +333,16 @@ func TestAnalyse_UndefinedReference(t *testing.T) {
 
 // FR-4.2.2: Forward references must resolve.
 func TestAnalyse_ForwardReference(t *testing.T) {
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.InstructionStmt{
 				Mnemonic: "jmp",
-				Operands: []kasm.Operand{
-					&kasm.IdentifierOperand{Name: "later", Line: 1, Column: 5},
+				Operands: []ast.Operand{
+					&ast.IdentifierOperand{Name: "later", Line: 1, Column: 5},
 				},
 				Line: 1, Column: 1,
 			},
-			&kasm.LabelStmt{Name: "later", Line: 3, Column: 1},
+			&ast.LabelStmt{Name: "later", Line: 3, Column: 1},
 		},
 	}
 	errors := kasm.AnalyserNew(program, minimalInstructions()).Analyse()
@@ -353,10 +354,10 @@ func TestAnalyse_ForwardReference(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestAnalyse_DuplicateNamespace(t *testing.T) {
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.NamespaceStmt{Name: "myns", Line: 1, Column: 1},
-			&kasm.NamespaceStmt{Name: "myns", Line: 5, Column: 1},
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.NamespaceStmt{Name: "myns", Line: 1, Column: 1},
+			&ast.NamespaceStmt{Name: "myns", Line: 5, Column: 1},
 		},
 	}
 	errors := kasm.AnalyserNew(program, minimalInstructions()).Analyse()
@@ -366,10 +367,10 @@ func TestAnalyse_DuplicateNamespace(t *testing.T) {
 }
 
 func TestAnalyse_UniqueNamespaces(t *testing.T) {
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.NamespaceStmt{Name: "ns1", Line: 1, Column: 1},
-			&kasm.NamespaceStmt{Name: "ns2", Line: 2, Column: 1},
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.NamespaceStmt{Name: "ns1", Line: 1, Column: 1},
+			&ast.NamespaceStmt{Name: "ns2", Line: 2, Column: 1},
 		},
 	}
 	errors := kasm.AnalyserNew(program, minimalInstructions()).Analyse()
@@ -377,9 +378,9 @@ func TestAnalyse_UniqueNamespaces(t *testing.T) {
 }
 
 func TestAnalyse_NamespaceStartsWithDigit(t *testing.T) {
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.NamespaceStmt{Name: "9invalid", Line: 1, Column: 1},
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.NamespaceStmt{Name: "9invalid", Line: 1, Column: 1},
 		},
 	}
 	errors := kasm.AnalyserNew(program, minimalInstructions()).Analyse()
@@ -392,10 +393,10 @@ func TestAnalyse_NamespaceStartsWithDigit(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestAnalyse_DuplicateUse(t *testing.T) {
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.UseStmt{ModuleName: "mymod", Line: 1, Column: 1},
-			&kasm.UseStmt{ModuleName: "mymod", Line: 3, Column: 1},
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.UseStmt{ModuleName: "mymod", Line: 1, Column: 1},
+			&ast.UseStmt{ModuleName: "mymod", Line: 3, Column: 1},
 		},
 	}
 	errors := kasm.AnalyserNew(program, minimalInstructions()).Analyse()
@@ -405,10 +406,10 @@ func TestAnalyse_DuplicateUse(t *testing.T) {
 }
 
 func TestAnalyse_UniqueUses(t *testing.T) {
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.UseStmt{ModuleName: "mod1", Line: 1, Column: 1},
-			&kasm.UseStmt{ModuleName: "mod2", Line: 2, Column: 1},
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.UseStmt{ModuleName: "mod1", Line: 1, Column: 1},
+			&ast.UseStmt{ModuleName: "mod2", Line: 2, Column: 1},
 		},
 	}
 	errors := kasm.AnalyserNew(program, minimalInstructions()).Analyse()
@@ -420,9 +421,9 @@ func TestAnalyse_UniqueUses(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestAnalyse_UnrecognisedDirective(t *testing.T) {
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.DirectiveStmt{Literal: "%foobar", Line: 1, Column: 1},
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.DirectiveStmt{Literal: "%foobar", Line: 1, Column: 1},
 		},
 	}
 	errors := kasm.AnalyserNew(program, minimalInstructions()).Analyse()
@@ -435,13 +436,13 @@ func TestAnalyse_UnrecognisedDirective(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestAnalyse_ValidDecimalImmediate(t *testing.T) {
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.InstructionStmt{
 				Mnemonic: "mov",
-				Operands: []kasm.Operand{
-					&kasm.RegisterOperand{Name: "rax", Line: 1, Column: 5},
-					&kasm.ImmediateOperand{Value: "42", Line: 1, Column: 10},
+				Operands: []ast.Operand{
+					&ast.RegisterOperand{Name: "rax", Line: 1, Column: 5},
+					&ast.ImmediateOperand{Value: "42", Line: 1, Column: 10},
 				},
 				Line: 1, Column: 1,
 			},
@@ -452,13 +453,13 @@ func TestAnalyse_ValidDecimalImmediate(t *testing.T) {
 }
 
 func TestAnalyse_ValidHexImmediate(t *testing.T) {
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.InstructionStmt{
 				Mnemonic: "mov",
-				Operands: []kasm.Operand{
-					&kasm.RegisterOperand{Name: "rax", Line: 1, Column: 5},
-					&kasm.ImmediateOperand{Value: "0xFF", Line: 1, Column: 10},
+				Operands: []ast.Operand{
+					&ast.RegisterOperand{Name: "rax", Line: 1, Column: 5},
+					&ast.ImmediateOperand{Value: "0xFF", Line: 1, Column: 10},
 				},
 				Line: 1, Column: 1,
 			},
@@ -469,13 +470,13 @@ func TestAnalyse_ValidHexImmediate(t *testing.T) {
 }
 
 func TestAnalyse_InvalidImmediate(t *testing.T) {
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.InstructionStmt{
 				Mnemonic: "mov",
-				Operands: []kasm.Operand{
-					&kasm.RegisterOperand{Name: "rax", Line: 1, Column: 5},
-					&kasm.ImmediateOperand{Value: "12abc", Line: 1, Column: 10},
+				Operands: []ast.Operand{
+					&ast.RegisterOperand{Name: "rax", Line: 1, Column: 5},
+					&ast.ImmediateOperand{Value: "12abc", Line: 1, Column: 10},
 				},
 				Line: 1, Column: 1,
 			},
@@ -490,13 +491,13 @@ func TestAnalyse_InvalidImmediate(t *testing.T) {
 }
 
 func TestAnalyse_InvalidHexImmediate_NoDigits(t *testing.T) {
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.InstructionStmt{
 				Mnemonic: "mov",
-				Operands: []kasm.Operand{
-					&kasm.RegisterOperand{Name: "rax", Line: 1, Column: 5},
-					&kasm.ImmediateOperand{Value: "0x", Line: 1, Column: 10},
+				Operands: []ast.Operand{
+					&ast.RegisterOperand{Name: "rax", Line: 1, Column: 5},
+					&ast.ImmediateOperand{Value: "0x", Line: 1, Column: 10},
 				},
 				Line: 1, Column: 1,
 			},
@@ -512,13 +513,13 @@ func TestAnalyse_InvalidHexImmediate_NoDigits(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestAnalyse_EmptyMemoryOperand(t *testing.T) {
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.InstructionStmt{
 				Mnemonic: "mov",
-				Operands: []kasm.Operand{
-					&kasm.MemoryOperand{Components: []kasm.MemoryComponent{}, Line: 1, Column: 5},
-					&kasm.RegisterOperand{Name: "rax", Line: 1, Column: 10},
+				Operands: []ast.Operand{
+					&ast.MemoryOperand{Components: []ast.MemoryComponent{}, Line: 1, Column: 5},
+					&ast.RegisterOperand{Name: "rax", Line: 1, Column: 10},
 				},
 				Line: 1, Column: 1,
 			},
@@ -538,18 +539,18 @@ func TestAnalyse_EmptyMemoryOperand(t *testing.T) {
 }
 
 func TestAnalyse_MemoryOperandImmediateBase(t *testing.T) {
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.InstructionStmt{
 				Mnemonic: "mov",
-				Operands: []kasm.Operand{
-					&kasm.MemoryOperand{
-						Components: []kasm.MemoryComponent{
+				Operands: []ast.Operand{
+					&ast.MemoryOperand{
+						Components: []ast.MemoryComponent{
 							{Token: kasm.Token{Type: kasm.TokenImmediate, Literal: "42", Line: 1, Column: 6}},
 						},
 						Line: 1, Column: 5,
 					},
-					&kasm.RegisterOperand{Name: "rax", Line: 1, Column: 12},
+					&ast.RegisterOperand{Name: "rax", Line: 1, Column: 12},
 				},
 				Line: 1, Column: 1,
 			},
@@ -568,20 +569,20 @@ func TestAnalyse_MemoryOperandImmediateBase(t *testing.T) {
 }
 
 func TestAnalyse_MemoryOperandInvalidOperator(t *testing.T) {
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.InstructionStmt{
 				Mnemonic: "mov",
-				Operands: []kasm.Operand{
-					&kasm.MemoryOperand{
-						Components: []kasm.MemoryComponent{
+				Operands: []ast.Operand{
+					&ast.MemoryOperand{
+						Components: []ast.MemoryComponent{
 							{Token: kasm.Token{Type: kasm.TokenRegister, Literal: "rbp", Line: 1, Column: 6}},
 							{Token: kasm.Token{Type: kasm.TokenIdentifier, Literal: "*", Line: 1, Column: 10}},
 							{Token: kasm.Token{Type: kasm.TokenImmediate, Literal: "8", Line: 1, Column: 12}},
 						},
 						Line: 1, Column: 5,
 					},
-					&kasm.RegisterOperand{Name: "rax", Line: 1, Column: 16},
+					&ast.RegisterOperand{Name: "rax", Line: 1, Column: 16},
 				},
 				Line: 1, Column: 1,
 			},
@@ -600,13 +601,13 @@ func TestAnalyse_MemoryOperandInvalidOperator(t *testing.T) {
 }
 
 func TestAnalyse_MemoryOperandValidOperators(t *testing.T) {
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.InstructionStmt{
 				Mnemonic: "syscall", // Use syscall (no variants) to avoid variant errors.
-				Operands: []kasm.Operand{
-					&kasm.MemoryOperand{
-						Components: []kasm.MemoryComponent{
+				Operands: []ast.Operand{
+					&ast.MemoryOperand{
+						Components: []ast.MemoryComponent{
 							{Token: kasm.Token{Type: kasm.TokenRegister, Literal: "rbp", Line: 1, Column: 6}},
 							{Token: kasm.Token{Type: kasm.TokenIdentifier, Literal: "+", Line: 1, Column: 10}},
 							{Token: kasm.Token{Type: kasm.TokenImmediate, Literal: "8", Line: 1, Column: 12}},
@@ -627,16 +628,16 @@ func TestAnalyse_MemoryOperandValidOperators(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestAnalyse_MultipleErrors(t *testing.T) {
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.LabelStmt{Name: "_start", Line: 1, Column: 1},
-			&kasm.LabelStmt{Name: "_start", Line: 2, Column: 1}, // duplicate
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.LabelStmt{Name: "_start", Line: 1, Column: 1},
+			&ast.LabelStmt{Name: "_start", Line: 2, Column: 1}, // duplicate
+			&ast.InstructionStmt{
 				Mnemonic: "foobar", // unknown
-				Operands: []kasm.Operand{},
+				Operands: []ast.Operand{},
 				Line:     3, Column: 1,
 			},
-			&kasm.DirectiveStmt{Literal: "%bogus", Line: 4, Column: 1}, // unrecognised
+			&ast.DirectiveStmt{Literal: "%bogus", Line: 4, Column: 1}, // unrecognised
 		},
 	}
 	errors := kasm.AnalyserNew(program, minimalInstructions()).Analyse()
@@ -650,26 +651,26 @@ func TestAnalyse_MultipleErrors(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestAnalyse_ForwardReference_FullProgram(t *testing.T) {
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.InstructionStmt{
 				Mnemonic: "jmp",
-				Operands: []kasm.Operand{
-					&kasm.IdentifierOperand{Name: "_start", Line: 1, Column: 5},
+				Operands: []ast.Operand{
+					&ast.IdentifierOperand{Name: "_start", Line: 1, Column: 5},
 				},
 				Line: 1, Column: 1,
 			},
-			&kasm.InstructionStmt{
+			&ast.InstructionStmt{
 				Mnemonic: "ret",
-				Operands: []kasm.Operand{},
+				Operands: []ast.Operand{},
 				Line:     2, Column: 1,
 			},
-			&kasm.LabelStmt{Name: "_start", Line: 3, Column: 1},
-			&kasm.InstructionStmt{
+			&ast.LabelStmt{Name: "_start", Line: 3, Column: 1},
+			&ast.InstructionStmt{
 				Mnemonic: "mov",
-				Operands: []kasm.Operand{
-					&kasm.RegisterOperand{Name: "rax", Line: 4, Column: 5},
-					&kasm.ImmediateOperand{Value: "60", Line: 4, Column: 10},
+				Operands: []ast.Operand{
+					&ast.RegisterOperand{Name: "rax", Line: 4, Column: 5},
+					&ast.ImmediateOperand{Value: "60", Line: 4, Column: 10},
 				},
 				Line: 4, Column: 1,
 			},
@@ -766,20 +767,20 @@ func TestAnalyse_Integration_WithErrors(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func BenchmarkAnalyse_SmallProgram(b *testing.B) {
-	program := &kasm.Program{
-		Statements: []kasm.Statement{
-			&kasm.LabelStmt{Name: "_start", Line: 1, Column: 1},
-			&kasm.InstructionStmt{
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.LabelStmt{Name: "_start", Line: 1, Column: 1},
+			&ast.InstructionStmt{
 				Mnemonic: "mov",
-				Operands: []kasm.Operand{
-					&kasm.RegisterOperand{Name: "rax", Line: 2, Column: 5},
-					&kasm.ImmediateOperand{Value: "60", Line: 2, Column: 10},
+				Operands: []ast.Operand{
+					&ast.RegisterOperand{Name: "rax", Line: 2, Column: 5},
+					&ast.ImmediateOperand{Value: "60", Line: 2, Column: 10},
 				},
 				Line: 2, Column: 1,
 			},
-			&kasm.InstructionStmt{
+			&ast.InstructionStmt{
 				Mnemonic: "ret",
-				Operands: []kasm.Operand{},
+				Operands: []ast.Operand{},
 				Line:     3, Column: 1,
 			},
 		},

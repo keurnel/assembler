@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/keurnel/assembler/v0/kasm"
+	"github.com/keurnel/assembler/v0/kasm/ast"
 	"github.com/keurnel/assembler/v0/kasm/profile"
 )
 
@@ -15,7 +16,7 @@ func tok(tokenType kasm.TokenType, literal string, line, col int) kasm.Token {
 	return kasm.Token{Type: tokenType, Literal: literal, Line: line, Column: col}
 }
 
-func requireStatementCount(t *testing.T, program *kasm.Program, expected int) {
+func requireStatementCount(t *testing.T, program *ast.Program, expected int) {
 	t.Helper()
 	if len(program.Statements) != expected {
 		t.Fatalf("expected %d statements, got %d", expected, len(program.Statements))
@@ -74,7 +75,7 @@ func TestParse_InstructionNoOperands(t *testing.T) {
 	requireNoErrors(t, errors)
 	requireStatementCount(t, program, 1)
 
-	stmt, ok := program.Statements[0].(*kasm.InstructionStmt)
+	stmt, ok := program.Statements[0].(*ast.InstructionStmt)
 	if !ok {
 		t.Fatalf("expected *InstructionStmt, got %T", program.Statements[0])
 	}
@@ -98,14 +99,14 @@ func TestParse_InstructionOneRegisterOperand(t *testing.T) {
 	requireNoErrors(t, errors)
 	requireStatementCount(t, program, 1)
 
-	stmt := program.Statements[0].(*kasm.InstructionStmt)
+	stmt := program.Statements[0].(*ast.InstructionStmt)
 	if stmt.Mnemonic != "push" {
 		t.Errorf("expected mnemonic %q, got %q", "push", stmt.Mnemonic)
 	}
 	if len(stmt.Operands) != 1 {
 		t.Fatalf("expected 1 operand, got %d", len(stmt.Operands))
 	}
-	reg, ok := stmt.Operands[0].(*kasm.RegisterOperand)
+	reg, ok := stmt.Operands[0].(*ast.RegisterOperand)
 	if !ok {
 		t.Fatalf("expected *RegisterOperand, got %T", stmt.Operands[0])
 	}
@@ -126,7 +127,7 @@ func TestParse_InstructionTwoOperands(t *testing.T) {
 	requireNoErrors(t, errors)
 	requireStatementCount(t, program, 1)
 
-	stmt := program.Statements[0].(*kasm.InstructionStmt)
+	stmt := program.Statements[0].(*ast.InstructionStmt)
 	if stmt.Mnemonic != "mov" {
 		t.Errorf("expected mnemonic %q, got %q", "mov", stmt.Mnemonic)
 	}
@@ -134,10 +135,10 @@ func TestParse_InstructionTwoOperands(t *testing.T) {
 		t.Fatalf("expected 2 operands, got %d", len(stmt.Operands))
 	}
 
-	if _, ok := stmt.Operands[0].(*kasm.RegisterOperand); !ok {
+	if _, ok := stmt.Operands[0].(*ast.RegisterOperand); !ok {
 		t.Errorf("expected operand[0] to be *RegisterOperand, got %T", stmt.Operands[0])
 	}
-	imm, ok := stmt.Operands[1].(*kasm.ImmediateOperand)
+	imm, ok := stmt.Operands[1].(*ast.ImmediateOperand)
 	if !ok {
 		t.Fatalf("expected operand[1] to be *ImmediateOperand, got %T", stmt.Operands[1])
 	}
@@ -156,11 +157,11 @@ func TestParse_InstructionStringOperand(t *testing.T) {
 	requireNoErrors(t, errors)
 	requireStatementCount(t, program, 1)
 
-	stmt := program.Statements[0].(*kasm.InstructionStmt)
+	stmt := program.Statements[0].(*ast.InstructionStmt)
 	if len(stmt.Operands) != 1 {
 		t.Fatalf("expected 1 operand, got %d", len(stmt.Operands))
 	}
-	str, ok := stmt.Operands[0].(*kasm.StringOperand)
+	str, ok := stmt.Operands[0].(*ast.StringOperand)
 	if !ok {
 		t.Fatalf("expected *StringOperand, got %T", stmt.Operands[0])
 	}
@@ -179,11 +180,11 @@ func TestParse_InstructionIdentifierOperand(t *testing.T) {
 	requireNoErrors(t, errors)
 	requireStatementCount(t, program, 1)
 
-	stmt := program.Statements[0].(*kasm.InstructionStmt)
+	stmt := program.Statements[0].(*ast.InstructionStmt)
 	if len(stmt.Operands) != 1 {
 		t.Fatalf("expected 1 operand, got %d", len(stmt.Operands))
 	}
-	ident, ok := stmt.Operands[0].(*kasm.IdentifierOperand)
+	ident, ok := stmt.Operands[0].(*ast.IdentifierOperand)
 	if !ok {
 		t.Fatalf("expected *IdentifierOperand, got %T", stmt.Operands[0])
 	}
@@ -206,7 +207,7 @@ func TestParse_InstructionMultipleInstructions(t *testing.T) {
 	requireNoErrors(t, errors)
 	requireStatementCount(t, program, 2)
 
-	stmt1 := program.Statements[0].(*kasm.InstructionStmt)
+	stmt1 := program.Statements[0].(*ast.InstructionStmt)
 	if stmt1.Mnemonic != "mov" {
 		t.Errorf("expected mnemonic %q, got %q", "mov", stmt1.Mnemonic)
 	}
@@ -214,7 +215,7 @@ func TestParse_InstructionMultipleInstructions(t *testing.T) {
 		t.Errorf("expected 2 operands, got %d", len(stmt1.Operands))
 	}
 
-	stmt2 := program.Statements[1].(*kasm.InstructionStmt)
+	stmt2 := program.Statements[1].(*ast.InstructionStmt)
 	if stmt2.Mnemonic != "syscall" {
 		t.Errorf("expected mnemonic %q, got %q", "syscall", stmt2.Mnemonic)
 	}
@@ -241,12 +242,12 @@ func TestParse_MemoryOperandSimple(t *testing.T) {
 	requireNoErrors(t, errors)
 	requireStatementCount(t, program, 1)
 
-	stmt := program.Statements[0].(*kasm.InstructionStmt)
+	stmt := program.Statements[0].(*ast.InstructionStmt)
 	if len(stmt.Operands) != 2 {
 		t.Fatalf("expected 2 operands, got %d", len(stmt.Operands))
 	}
 
-	mem, ok := stmt.Operands[0].(*kasm.MemoryOperand)
+	mem, ok := stmt.Operands[0].(*ast.MemoryOperand)
 	if !ok {
 		t.Fatalf("expected *MemoryOperand, got %T", stmt.Operands[0])
 	}
@@ -274,8 +275,8 @@ func TestParse_MemoryOperandWithDisplacement(t *testing.T) {
 	requireNoErrors(t, errors)
 	requireStatementCount(t, program, 1)
 
-	stmt := program.Statements[0].(*kasm.InstructionStmt)
-	mem := stmt.Operands[0].(*kasm.MemoryOperand)
+	stmt := program.Statements[0].(*ast.InstructionStmt)
+	mem := stmt.Operands[0].(*ast.MemoryOperand)
 	if len(mem.Components) != 3 {
 		t.Fatalf("expected 3 memory components, got %d", len(mem.Components))
 	}
@@ -319,7 +320,7 @@ func TestParse_Label(t *testing.T) {
 	requireNoErrors(t, errors)
 	requireStatementCount(t, program, 1)
 
-	stmt, ok := program.Statements[0].(*kasm.LabelStmt)
+	stmt, ok := program.Statements[0].(*ast.LabelStmt)
 	if !ok {
 		t.Fatalf("expected *LabelStmt, got %T", program.Statements[0])
 	}
@@ -339,7 +340,7 @@ func TestParse_DotLabel(t *testing.T) {
 	requireNoErrors(t, errors)
 	requireStatementCount(t, program, 1)
 
-	stmt := program.Statements[0].(*kasm.LabelStmt)
+	stmt := program.Statements[0].(*ast.LabelStmt)
 	if stmt.Name != ".loop" {
 		t.Errorf("expected label name %q, got %q", ".loop", stmt.Name)
 	}
@@ -357,10 +358,10 @@ func TestParse_LabelFollowedByInstruction(t *testing.T) {
 	requireNoErrors(t, errors)
 	requireStatementCount(t, program, 2)
 
-	if _, ok := program.Statements[0].(*kasm.LabelStmt); !ok {
+	if _, ok := program.Statements[0].(*ast.LabelStmt); !ok {
 		t.Errorf("expected statement[0] to be *LabelStmt, got %T", program.Statements[0])
 	}
-	if _, ok := program.Statements[1].(*kasm.InstructionStmt); !ok {
+	if _, ok := program.Statements[1].(*ast.InstructionStmt); !ok {
 		t.Errorf("expected statement[1] to be *InstructionStmt, got %T", program.Statements[1])
 	}
 }
@@ -378,7 +379,7 @@ func TestParse_Namespace(t *testing.T) {
 	requireNoErrors(t, errors)
 	requireStatementCount(t, program, 1)
 
-	stmt, ok := program.Statements[0].(*kasm.NamespaceStmt)
+	stmt, ok := program.Statements[0].(*ast.NamespaceStmt)
 	if !ok {
 		t.Fatalf("expected *NamespaceStmt, got %T", program.Statements[0])
 	}
@@ -424,7 +425,7 @@ func TestParse_Use(t *testing.T) {
 	requireNoErrors(t, errors)
 	requireStatementCount(t, program, 1)
 
-	stmt, ok := program.Statements[0].(*kasm.UseStmt)
+	stmt, ok := program.Statements[0].(*ast.UseStmt)
 	if !ok {
 		t.Fatalf("expected *UseStmt, got %T", program.Statements[0])
 	}
@@ -465,7 +466,7 @@ func TestParse_UseCaseInsensitive(t *testing.T) {
 	requireNoErrors(t, errors)
 	requireStatementCount(t, program, 1)
 
-	stmt := program.Statements[0].(*kasm.UseStmt)
+	stmt := program.Statements[0].(*ast.UseStmt)
 	if stmt.ModuleName != "mod" {
 		t.Errorf("expected module name %q, got %q", "mod", stmt.ModuleName)
 	}
@@ -483,7 +484,7 @@ func TestParse_DirectiveNoArgs(t *testing.T) {
 	requireNoErrors(t, errors)
 	requireStatementCount(t, program, 1)
 
-	stmt, ok := program.Statements[0].(*kasm.DirectiveStmt)
+	stmt, ok := program.Statements[0].(*ast.DirectiveStmt)
 	if !ok {
 		t.Fatalf("expected *DirectiveStmt, got %T", program.Statements[0])
 	}
@@ -505,7 +506,7 @@ func TestParse_DirectiveWithArgs(t *testing.T) {
 	requireNoErrors(t, errors)
 	requireStatementCount(t, program, 1)
 
-	stmt := program.Statements[0].(*kasm.DirectiveStmt)
+	stmt := program.Statements[0].(*ast.DirectiveStmt)
 	if stmt.Literal != "%define" {
 		t.Errorf("expected literal %q, got %q", "%define", stmt.Literal)
 	}
@@ -527,7 +528,7 @@ func TestParse_DirectiveWithStringArg(t *testing.T) {
 	requireNoErrors(t, errors)
 	requireStatementCount(t, program, 1)
 
-	stmt := program.Statements[0].(*kasm.DirectiveStmt)
+	stmt := program.Statements[0].(*ast.DirectiveStmt)
 	if len(stmt.Args) != 1 {
 		t.Fatalf("expected 1 arg, got %d", len(stmt.Args))
 	}
@@ -551,10 +552,10 @@ func TestParse_DirectiveStopsAtNextStatement(t *testing.T) {
 	requireNoErrors(t, errors)
 	requireStatementCount(t, program, 2)
 
-	if _, ok := program.Statements[0].(*kasm.DirectiveStmt); !ok {
+	if _, ok := program.Statements[0].(*ast.DirectiveStmt); !ok {
 		t.Errorf("expected statement[0] to be *DirectiveStmt, got %T", program.Statements[0])
 	}
-	if _, ok := program.Statements[1].(*kasm.InstructionStmt); !ok {
+	if _, ok := program.Statements[1].(*ast.InstructionStmt); !ok {
 		t.Errorf("expected statement[1] to be *InstructionStmt, got %T", program.Statements[1])
 	}
 }
@@ -585,7 +586,7 @@ func TestParse_Section(t *testing.T) {
 	requireNoErrors(t, errors)
 	requireStatementCount(t, program, 1)
 
-	stmt, ok := program.Statements[0].(*kasm.SectionStmt)
+	stmt, ok := program.Statements[0].(*ast.SectionStmt)
 	if !ok {
 		t.Fatalf("expected *SectionStmt, got %T", program.Statements[0])
 	}
@@ -610,7 +611,7 @@ func TestParse_SectionTextWithColon(t *testing.T) {
 	requireNoErrors(t, errors)
 	requireStatementCount(t, program, 1)
 
-	stmt := program.Statements[0].(*kasm.SectionStmt)
+	stmt := program.Statements[0].(*ast.SectionStmt)
 	if stmt.Type != ".text" {
 		t.Errorf("expected section type %q, got %q", ".text", stmt.Type)
 	}
@@ -630,7 +631,7 @@ func TestParse_SectionTypeWithoutColon(t *testing.T) {
 	requireNoErrors(t, errors)
 	requireStatementCount(t, program, 1)
 
-	stmt := program.Statements[0].(*kasm.SectionStmt)
+	stmt := program.Statements[0].(*ast.SectionStmt)
 	if stmt.Type != ".bss" {
 		t.Errorf("expected section type %q, got %q", ".bss", stmt.Type)
 	}
@@ -697,10 +698,10 @@ func TestParse_SectionFollowedByInstruction(t *testing.T) {
 	requireNoErrors(t, errors)
 	requireStatementCount(t, program, 2)
 
-	if _, ok := program.Statements[0].(*kasm.SectionStmt); !ok {
+	if _, ok := program.Statements[0].(*ast.SectionStmt); !ok {
 		t.Errorf("expected statement[0] *SectionStmt, got %T", program.Statements[0])
 	}
-	if _, ok := program.Statements[1].(*kasm.InstructionStmt); !ok {
+	if _, ok := program.Statements[1].(*ast.InstructionStmt); !ok {
 		t.Errorf("expected statement[1] *InstructionStmt, got %T", program.Statements[1])
 	}
 }
@@ -717,7 +718,7 @@ func TestParse_SectionRecovery(t *testing.T) {
 	requireErrorCount(t, errors, 1)
 	requireStatementCount(t, program, 1)
 
-	if _, ok := program.Statements[0].(*kasm.SectionStmt); !ok {
+	if _, ok := program.Statements[0].(*ast.SectionStmt); !ok {
 		t.Errorf("expected *SectionStmt after recovery, got %T", program.Statements[0])
 	}
 }
@@ -735,7 +736,7 @@ _start:
 	// section .data: my_data + _start: + mov rax, 60 = 3 statements
 	requireStatementCount(t, program, 3)
 
-	sec, ok := program.Statements[0].(*kasm.SectionStmt)
+	sec, ok := program.Statements[0].(*ast.SectionStmt)
 	if !ok {
 		t.Fatalf("expected *SectionStmt, got %T", program.Statements[0])
 	}
@@ -746,10 +747,10 @@ _start:
 		t.Errorf("expected section name %q, got %q", "my_data", sec.Name)
 	}
 
-	if _, ok := program.Statements[1].(*kasm.LabelStmt); !ok {
+	if _, ok := program.Statements[1].(*ast.LabelStmt); !ok {
 		t.Errorf("expected *LabelStmt, got %T", program.Statements[1])
 	}
-	if _, ok := program.Statements[2].(*kasm.InstructionStmt); !ok {
+	if _, ok := program.Statements[2].(*ast.InstructionStmt); !ok {
 		t.Errorf("expected *InstructionStmt, got %T", program.Statements[2])
 	}
 }
@@ -815,7 +816,7 @@ func TestParse_RecoveryAfterError(t *testing.T) {
 	requireErrorCount(t, errors, 1)
 	requireStatementCount(t, program, 1)
 
-	if _, ok := program.Statements[0].(*kasm.InstructionStmt); !ok {
+	if _, ok := program.Statements[0].(*ast.InstructionStmt); !ok {
 		t.Errorf("expected *InstructionStmt after recovery, got %T", program.Statements[0])
 	}
 }
@@ -853,7 +854,7 @@ func TestParse_RecoverySkipsToLabel(t *testing.T) {
 	requireErrorCount(t, errors, 1)
 	requireStatementCount(t, program, 1)
 
-	if _, ok := program.Statements[0].(*kasm.LabelStmt); !ok {
+	if _, ok := program.Statements[0].(*ast.LabelStmt); !ok {
 		t.Errorf("expected *LabelStmt after recovery, got %T", program.Statements[0])
 	}
 }
@@ -889,22 +890,22 @@ func TestParse_FullProgram(t *testing.T) {
 	requireNoErrors(t, errors)
 	requireStatementCount(t, program, 6) // directive + label + mov + xor + syscall + namespace
 
-	if _, ok := program.Statements[0].(*kasm.DirectiveStmt); !ok {
+	if _, ok := program.Statements[0].(*ast.DirectiveStmt); !ok {
 		t.Errorf("expected statement[0] *DirectiveStmt, got %T", program.Statements[0])
 	}
-	if _, ok := program.Statements[1].(*kasm.LabelStmt); !ok {
+	if _, ok := program.Statements[1].(*ast.LabelStmt); !ok {
 		t.Errorf("expected statement[1] *LabelStmt, got %T", program.Statements[1])
 	}
-	if _, ok := program.Statements[2].(*kasm.InstructionStmt); !ok {
+	if _, ok := program.Statements[2].(*ast.InstructionStmt); !ok {
 		t.Errorf("expected statement[2] *InstructionStmt, got %T", program.Statements[2])
 	}
-	if _, ok := program.Statements[3].(*kasm.InstructionStmt); !ok {
+	if _, ok := program.Statements[3].(*ast.InstructionStmt); !ok {
 		t.Errorf("expected statement[3] *InstructionStmt, got %T", program.Statements[3])
 	}
-	if _, ok := program.Statements[4].(*kasm.InstructionStmt); !ok {
+	if _, ok := program.Statements[4].(*ast.InstructionStmt); !ok {
 		t.Errorf("expected statement[4] *InstructionStmt, got %T", program.Statements[4])
 	}
-	ns, ok := program.Statements[5].(*kasm.NamespaceStmt)
+	ns, ok := program.Statements[5].(*ast.NamespaceStmt)
 	if !ok {
 		t.Errorf("expected statement[5] *NamespaceStmt, got %T", program.Statements[5])
 	} else if ns.Name != "myns" {
@@ -926,10 +927,10 @@ func TestParse_UseFollowedByInstruction(t *testing.T) {
 	requireNoErrors(t, errors)
 	requireStatementCount(t, program, 2)
 
-	if _, ok := program.Statements[0].(*kasm.UseStmt); !ok {
+	if _, ok := program.Statements[0].(*ast.UseStmt); !ok {
 		t.Errorf("expected *UseStmt, got %T", program.Statements[0])
 	}
-	if _, ok := program.Statements[1].(*kasm.InstructionStmt); !ok {
+	if _, ok := program.Statements[1].(*ast.InstructionStmt); !ok {
 		t.Errorf("expected *InstructionStmt, got %T", program.Statements[1])
 	}
 }
@@ -949,22 +950,22 @@ func TestParse_PositionTracking(t *testing.T) {
 	program, errors := kasm.ParserNew(tokens).Parse()
 	requireNoErrors(t, errors)
 
-	label := program.Statements[0].(*kasm.LabelStmt)
+	label := program.Statements[0].(*ast.LabelStmt)
 	if label.Line != 1 || label.Column != 1 {
 		t.Errorf("label position: expected 1:1, got %d:%d", label.Line, label.Column)
 	}
 
-	instr := program.Statements[1].(*kasm.InstructionStmt)
+	instr := program.Statements[1].(*ast.InstructionStmt)
 	if instr.Line != 2 || instr.Column != 5 {
 		t.Errorf("instruction position: expected 2:5, got %d:%d", instr.Line, instr.Column)
 	}
 
-	reg := instr.Operands[0].(*kasm.RegisterOperand)
+	reg := instr.Operands[0].(*ast.RegisterOperand)
 	if reg.Line != 2 || reg.Column != 9 {
 		t.Errorf("register operand position: expected 2:9, got %d:%d", reg.Line, reg.Column)
 	}
 
-	imm := instr.Operands[1].(*kasm.ImmediateOperand)
+	imm := instr.Operands[1].(*ast.ImmediateOperand)
 	if imm.Line != 2 || imm.Column != 14 {
 		t.Errorf("immediate operand position: expected 2:14, got %d:%d", imm.Line, imm.Column)
 	}
@@ -988,11 +989,11 @@ func TestParse_Integration_LexerToParser(t *testing.T) {
 	// _start: + mov + xor + syscall = 4 statements
 	requireStatementCount(t, program, 4)
 
-	if _, ok := program.Statements[0].(*kasm.LabelStmt); !ok {
+	if _, ok := program.Statements[0].(*ast.LabelStmt); !ok {
 		t.Errorf("expected *LabelStmt, got %T", program.Statements[0])
 	}
 	for i := 1; i <= 3; i++ {
-		if _, ok := program.Statements[i].(*kasm.InstructionStmt); !ok {
+		if _, ok := program.Statements[i].(*ast.InstructionStmt); !ok {
 			t.Errorf("expected statement[%d] *InstructionStmt, got %T", i, program.Statements[i])
 		}
 	}
@@ -1008,7 +1009,7 @@ namespace voorbeeld`
 	requireNoErrors(t, errors)
 	requireStatementCount(t, program, 2)
 
-	useStmt, ok := program.Statements[0].(*kasm.UseStmt)
+	useStmt, ok := program.Statements[0].(*ast.UseStmt)
 	if !ok {
 		t.Fatalf("expected *UseStmt, got %T", program.Statements[0])
 	}
@@ -1016,7 +1017,7 @@ namespace voorbeeld`
 		t.Errorf("expected module %q, got %q", "mymodule", useStmt.ModuleName)
 	}
 
-	nsStmt, ok := program.Statements[1].(*kasm.NamespaceStmt)
+	nsStmt, ok := program.Statements[1].(*ast.NamespaceStmt)
 	if !ok {
 		t.Fatalf("expected *NamespaceStmt, got %T", program.Statements[1])
 	}
@@ -1034,14 +1035,14 @@ func TestParse_Integration_MemoryOperand(t *testing.T) {
 	requireNoErrors(t, errors)
 	requireStatementCount(t, program, 1)
 
-	stmt := program.Statements[0].(*kasm.InstructionStmt)
+	stmt := program.Statements[0].(*ast.InstructionStmt)
 	if len(stmt.Operands) != 2 {
 		t.Fatalf("expected 2 operands, got %d", len(stmt.Operands))
 	}
-	if _, ok := stmt.Operands[0].(*kasm.MemoryOperand); !ok {
+	if _, ok := stmt.Operands[0].(*ast.MemoryOperand); !ok {
 		t.Errorf("expected operand[0] *MemoryOperand, got %T", stmt.Operands[0])
 	}
-	if _, ok := stmt.Operands[1].(*kasm.RegisterOperand); !ok {
+	if _, ok := stmt.Operands[1].(*ast.RegisterOperand); !ok {
 		t.Errorf("expected operand[1] *RegisterOperand, got %T", stmt.Operands[1])
 	}
 }
@@ -1060,7 +1061,7 @@ _start:
 	// %include "hulp.kasm" + %define DEBUG + _start: + mov rax, 1
 	requireStatementCount(t, program, 4)
 
-	dir := program.Statements[0].(*kasm.DirectiveStmt)
+	dir := program.Statements[0].(*ast.DirectiveStmt)
 	if dir.Literal != "%include" {
 		t.Errorf("expected directive %q, got %q", "%include", dir.Literal)
 	}
