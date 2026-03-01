@@ -113,7 +113,8 @@ Every public pre-processing function follows one of two signatures:
                          │
   ┌──────────────────────┼──────────────────────┐
   │ Phase 1              ▼                      │
-  │  PreProcessingHandleIncludes(source)        │
+  │  PreProcessingHandleIncludes(source,        │
+  │       alreadyIncluded)                      │
   │       → source', []PreProcessingInclusion   │
   └──────────────────────┬──────────────────────┘
                          │ source'
@@ -256,11 +257,17 @@ MacroCall {
 
 ## FR-1: Includes (`PreProcessingHandleIncludes`)
 
-`PreProcessingHandleIncludes(source) → (source, []PreProcessingInclusion)`
+`PreProcessingHandleIncludes(source, alreadyIncluded) → (source, []PreProcessingInclusion)`
 
 Processes `%include` directives, replacing each with the content of the
 referenced file. Returns the transformed source and a list of inclusions for
 traceability.
+
+The `alreadyIncluded` parameter is a `map[string]bool` containing file paths
+that have been inlined by previous invocations (FR-1.7: Shared Dependency
+Deduplication). When a `%include` directive references a path in this set, the
+directive line is silently removed without reading or inlining the file content
+again. Pass `nil` if no deduplication is needed.
 
 ### FR-1.1: Directive Syntax
 
@@ -296,6 +303,15 @@ traceability.
   whitespace before insertion.
 - **FR-1.3.3** Line numbers for all inclusions are computed **before** any
   replacement, so that reported line numbers refer to the original source.
+- **FR-1.3.4** Replacements are performed in **reverse source order** (last
+  directive first). This ensures each `%include` is replaced at its original
+  position in the source, preventing an earlier inline from injecting content
+  that shifts or captures a later directive's match. In particular, this
+  guarantees that shared dependencies are inlined at the top-level `%include`
+  location rather than inside a nested include's raw content.
+- **FR-1.3.5** Only the first regex match for a given path is replaced per
+  inclusion. After all inlining, any remaining `%include` directives for
+  already-seen or deduplicated paths are stripped from the source (FR-1.7).
 
 ### FR-1.4: Return Value
 
@@ -321,10 +337,12 @@ If a dependency contains its own `%include` directives, those are called
 validating, and inlining the dependency graph into the top-level source.
 
 - **FR-1.5.1** The orchestrator creates the dependency graph via
-  `dependency_graph.New(source, cwd)` before calling
-  `PreProcessingHandleIncludes`. The graph recursively scans the source and
-  all included files for `%include` directives, building a complete directed
-  acyclic graph (DAG) of all dependencies. See
+  `dependency_graph.New(source, cwd, rootFilePath)` before calling
+  `PreProcessingHandleIncludes`. The `rootFilePath` is the absolute path of
+  the top-level source file; it is added as a node so that cycles involving
+  the root are reported starting from it. The graph recursively scans the
+  source and all included files for `%include` directives, building a
+  complete directed acyclic graph (DAG) of all dependencies. See
   [dependency-graph.md FR-1](dependency-graph.md#fr-1-graph-construction) and
   [FR-5](dependency-graph.md#fr-5-recursive-resolution).
     - **FR-1.5.1.1** Nodes in the graph are files; edges are `%include`
@@ -402,10 +420,10 @@ inlining the content again.
 
 - **FR-1.7.1** The orchestrator must track which file paths have already been
   inlined (the same seen-set used for circular include detection, FR-1.6.2).
-  When a `%include` directive resolves to a path that is already in the
-  seen-set, the directive line must be removed from the source (replaced with
-  an empty string or a comment) without reading or inlining the file content
-  a second time.
+  This set is passed to `PreProcessingHandleIncludes` as the `alreadyIncluded`
+  parameter. When a `%include` directive resolves to a path that is already in
+  the set, the directive line is removed from the source (replaced with an
+  empty string) without reading or inlining the file content a second time.
 - **FR-1.7.2** The first inclusion of a shared dependency is inlined normally
   (FR-1.3.1), complete with `; FILE:` / `; END FILE:` boundary comments. The
   `PreProcessingInclusion` entry for the first occurrence is recorded as

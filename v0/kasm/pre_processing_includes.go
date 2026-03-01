@@ -102,9 +102,11 @@ func PreProcessingHandleIncludes(source string, alreadyIncluded map[string]bool)
 
 	// Pass 3: replace each %include directive with the file content,
 	// surrounded by ; FILE: / ; END FILE: comments.
-	// Uses ReplaceFirst (n=1) so that only the first occurrence is inlined;
-	// any duplicate occurrences of the same path remain as-is for now.
-	for _, inclusion := range inclusions {
+	// Process in reverse source order so that replacements at later positions
+	// do not shift earlier positions, and each directive is replaced at its
+	// original location rather than at a match injected by a previous inline.
+	for idx := len(inclusions) - 1; idx >= 0; idx-- {
+		inclusion := inclusions[idx]
 		includedContentBytes, err := os.ReadFile(inclusion.IncludedFilePath)
 		if err != nil {
 			message := fmt.Sprintf("pre-processing error: Failed to read included file '%s' at line %d: %v",

@@ -1,4 +1,12 @@
 ; FILE: circular-dep.kasm
+%macro hulp_functie 2
+    mov rax, %1
+    mov rdi, %2
+    mov rsi, message
+    mov rdx, 13
+%endmacro
+; END FILE: circular-dep.kasm
+
 ; FILE: shared-module.kasm
 %macro module_macro12 2
     mov rax, %1
@@ -8,13 +16,6 @@
 %endmacro
 ; END FILE: shared-module.kasm
 
-%macro hulp_functie 2
-    mov rax, %1
-    mov rdi, %2
-    mov rsi, message
-    mov rdx, 13
-%endmacro
-; END FILE: circular-dep.kasm
 %macro main_macro 2
     mov rax, %1
     mov rdi, %2
