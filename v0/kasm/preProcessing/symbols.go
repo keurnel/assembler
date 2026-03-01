@@ -9,7 +9,7 @@ import (
 // Pre-compiled regex for %define directives (AR-6.3).
 var defineDirectiveRegex = regexp.MustCompile(`(?m)^\s*%define\s+(\w+)\s*$`)
 
-// PreProcessingCreateSymbolTable scans the source code for %define directives and builds
+// CreateSymbolTable scans the source code for %define directives and builds
 // a symbol table mapping each defined symbol name to true.
 // Macro names from the provided macro table are also added as defined symbols.
 // It returns the symbol table for use in conditional assembly processing.

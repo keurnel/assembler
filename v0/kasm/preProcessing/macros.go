@@ -14,7 +14,7 @@ var (
 	macroDefRegex = regexp.MustCompile(`(?m)^\s*%macro\s+(\w+)\s*(\d*)\s*$`)
 )
 
-// PreProcessingHasMacros returns true if the source contains at least one
+// HasMacros returns true if the source contains at least one
 // %macro directive, false otherwise. Used as an early-exit check.
 func HasMacros(source string) bool {
 	return macroDetectRegex.MatchString(source)
@@ -70,7 +70,7 @@ func MacroTable(source string) map[string]Macro {
 	return macroTable
 }
 
-// PreProcessingCollectMacroCalls scans the source for invocations of each macro
+// CollectMacroCalls scans the source for invocations of each macro
 // in the provided table and appends found calls to Macro.Calls.
 // This function mutates macroTable in place — the caller's map is updated directly.
 func CollectMacroCalls(source string, macroTable map[string]Macro) {
@@ -116,7 +116,7 @@ func CollectMacroCalls(source string, macroTable map[string]Macro) {
 	}
 }
 
-// PreProcessingReplaceMacroCalls replaces macro invocations in the source code
+// ReplaceMacroCalls replaces macro invocations in the source code
 // with their expanded bodies based on the provided macro table. Placeholders
 // (%1, %2, …) are substituted with the call's arguments. Returns the
 // transformed source string.

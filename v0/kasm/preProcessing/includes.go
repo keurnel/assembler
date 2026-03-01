@@ -10,7 +10,7 @@ import (
 // Pre-compiled regex for %include directives (AR-6.3).
 var includeDirectiveRegex = regexp.MustCompile(`(?m)^\s*%include\s+"([^"]+)"\s*$`)
 
-// PreProcessingHandleIncludes processes %include directives in the source code,
+// HandleIncludes processes %include directives in the source code,
 // replacing each with the content of the referenced file. It returns the
 // updated source code and a list of inclusions for error reporting and debugging.
 //

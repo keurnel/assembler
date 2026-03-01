@@ -12,7 +12,7 @@ var conditionalDirectiveRegex = regexp.MustCompile(`(?m)^\s*%(ifdef|ifndef|else|
 // Pre-compiled regex for %define directives used for stripping (FR-3.4, AR-6.3).
 var defineStripRegex = regexp.MustCompile(`(?m)^\s*%define\s+\w+\s*\n?`)
 
-// PreProcessingHandleConditionals evaluates conditional assembly blocks
+// HandleConditionals evaluates conditional assembly blocks
 // (%ifdef, %ifndef, %else, %endif) and produces a source string with only
 // the active branches retained. Directive lines are removed from the output.
 func HandleConditionals(source string, definedSymbols map[string]bool) string {
