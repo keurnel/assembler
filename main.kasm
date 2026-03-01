@@ -8,3 +8,6 @@
     mov rsi, message
     mov rdx, 13
 %endmacro
+
+mov rax, 1
+mov rdi, 1

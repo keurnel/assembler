@@ -149,23 +149,33 @@ func runAssembleFile(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("assembly aborted: %d error(s) during semantic analysis", len(semanticErrors))
 	}
 
-	// Render program
-	//
-	for _, stmt := range program.Statements {
+	// Code generation phase: encode the validated AST into machine code
+	// (FR-9.1, FR-9.2).
+	generator := kasm.GeneratorNew(program, instrTable).WithDebugContext(debugCtx)
+	output, codegenErrors := generator.Generate()
 
-		switch s := stmt.(type) {
-		case *kasm.InstructionStmt:
-			fmt.Printf("Instruction: %s\n", s.Mnemonic)
-			for i, op := range s.Operands {
-				fmt.Printf("  Operand %d: %T\n", i+1, op)
-			}
-		case *kasm.LabelStmt:
-			fmt.Printf("Label: %s\n", s.Name)
-		case *kasm.SectionStmt:
-			fmt.Printf("Section: %s\n", s.Name)
-			fmt.Printf("type: %s\n", s.Type)
+	// Print debug context entries when verbose mode is enabled (codegen phase).
+	if verbose {
+		for _, e := range debugCtx.Entries() {
+			cmd.PrintErrln(e.String())
 		}
+	}
 
+	// Abort if code generation recorded any errors (FR-9.3).
+	if len(codegenErrors) > 0 {
+		if !verbose {
+			for _, e := range debugCtx.Errors() {
+				cmd.PrintErrln(e.String())
+			}
+		}
+		return fmt.Errorf("assembly aborted: %d error(s) during code generation", len(codegenErrors))
+	}
+
+	// FR-9.4: Write the binary output. Default name is the input file with
+	// the extension replaced by .bin.
+	outputPath := strings.TrimSuffix(fullPath, filepath.Ext(fullPath)) + ".bin"
+	if err := os.WriteFile(outputPath, output, 0644); err != nil {
+		return fmt.Errorf("failed to write output file: %w", err)
 	}
 
 	return nil
