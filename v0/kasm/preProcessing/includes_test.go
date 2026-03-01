@@ -1,4 +1,4 @@
-package kasm_test
+package preProcessing_test
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/keurnel/assembler/v0/kasm"
+	"github.com/keurnel/assembler/v0/kasm/preProcessing"
 )
 
 // --- PreProcessingHandleIncludes ---
@@ -19,7 +19,7 @@ func TestPreProcessingHandleIncludes_SingleInclude(t *testing.T) {
 	os.WriteFile(includePath, []byte("mov rax, 1\nmov rdi, 0"), 0644)
 
 	source := `%include "` + includePath + `"`
-	result, inclusions := kasm.PreProcessingHandleIncludes(source, nil)
+	result, inclusions := preProcessing.HandleIncludes(source, nil)
 
 	if len(inclusions) != 1 {
 		t.Fatalf("expected 1 inclusion, got %d", len(inclusions))
@@ -55,7 +55,7 @@ func TestPreProcessingHandleIncludes_MultipleIncludes(t *testing.T) {
 
 	source := `%include "` + path1 + `"
 %include "` + path2 + `"`
-	result, inclusions := kasm.PreProcessingHandleIncludes(source, nil)
+	result, inclusions := preProcessing.HandleIncludes(source, nil)
 
 	if len(inclusions) != 2 {
 		t.Fatalf("expected 2 inclusions, got %d", len(inclusions))
@@ -71,7 +71,7 @@ func TestPreProcessingHandleIncludes_MultipleIncludes(t *testing.T) {
 
 func TestPreProcessingHandleIncludes_NoIncludes(t *testing.T) {
 	source := `mov rax, 1`
-	result, inclusions := kasm.PreProcessingHandleIncludes(source, nil)
+	result, inclusions := preProcessing.HandleIncludes(source, nil)
 
 	if len(inclusions) != 0 {
 		t.Fatalf("expected 0 inclusions, got %d", len(inclusions))
@@ -98,7 +98,7 @@ func TestPreProcessingHandleIncludes_NonKasmExtension_Panics(t *testing.T) {
 	}()
 
 	source := `%include "module.asm"`
-	kasm.PreProcessingHandleIncludes(source, nil)
+	preProcessing.HandleIncludes(source, nil)
 }
 
 // TestPreProcessingHandleIncludes_DuplicateInclude_Deduplicated verifies
@@ -111,7 +111,7 @@ func TestPreProcessingHandleIncludes_DuplicateInclude_Deduplicated(t *testing.T)
 
 	source := `%include "` + includePath + `"
 %include "` + includePath + `"`
-	result, inclusions := kasm.PreProcessingHandleIncludes(source, nil)
+	result, inclusions := preProcessing.HandleIncludes(source, nil)
 
 	// Only one inclusion should be recorded (the first occurrence).
 	if len(inclusions) != 1 {
@@ -146,7 +146,7 @@ func TestPreProcessingHandleIncludes_FileNotFound_Panics(t *testing.T) {
 	}()
 
 	source := `%include "nonexistent.kasm"`
-	kasm.PreProcessingHandleIncludes(source, nil)
+	preProcessing.HandleIncludes(source, nil)
 }
 
 func TestPreProcessingHandleIncludes_LineNumber(t *testing.T) {
@@ -157,7 +157,7 @@ func TestPreProcessingHandleIncludes_LineNumber(t *testing.T) {
 	source := `; line 1
 ; line 2
 %include "` + includePath + `"`
-	_, inclusions := kasm.PreProcessingHandleIncludes(source, nil)
+	_, inclusions := preProcessing.HandleIncludes(source, nil)
 
 	if len(inclusions) != 1 {
 		t.Fatalf("expected 1 inclusion, got %d", len(inclusions))
@@ -173,7 +173,7 @@ func TestPreProcessingHandleIncludes_TrimWhitespace(t *testing.T) {
 	os.WriteFile(includePath, []byte("\n  mov rax, 1\n\n"), 0644)
 
 	source := `%include "` + includePath + `"`
-	result, _ := kasm.PreProcessingHandleIncludes(source, nil)
+	result, _ := preProcessing.HandleIncludes(source, nil)
 
 	// Should not start with newline inside FILE block (trimmed)
 	if !containsSubstring(result, "; FILE: "+includePath+"\nmov rax, 1\n; END FILE:") {
@@ -196,7 +196,7 @@ func TestPreProcessingHandleIncludes_SharedDependency_Skipped(t *testing.T) {
 	source := `%include "` + sharedPath + `"` + "\nmov rbx, 1"
 	alreadyIncluded := map[string]bool{sharedPath: true}
 
-	result, inclusions := kasm.PreProcessingHandleIncludes(source, alreadyIncluded)
+	result, inclusions := preProcessing.HandleIncludes(source, alreadyIncluded)
 
 	// FR-1.7.1: The directive should be stripped.
 	if strings.Contains(result, "%include") {
@@ -232,7 +232,7 @@ func TestPreProcessingHandleIncludes_SharedDependency_MixedWithNew(t *testing.T)
 	source := `%include "` + sharedPath + `"` + "\n" + `%include "` + newPath + `"`
 	alreadyIncluded := map[string]bool{sharedPath: true}
 
-	result, inclusions := kasm.PreProcessingHandleIncludes(source, alreadyIncluded)
+	result, inclusions := preProcessing.HandleIncludes(source, alreadyIncluded)
 
 	// FR-1.7.2: The new file should be inlined normally.
 	if len(inclusions) != 1 {
@@ -265,7 +265,7 @@ func TestPreProcessingHandleIncludes_SharedDependency_NilSet(t *testing.T) {
 	os.WriteFile(path, []byte("nop"), 0644)
 
 	source := `%include "` + path + `"`
-	result, inclusions := kasm.PreProcessingHandleIncludes(source, nil)
+	result, inclusions := preProcessing.HandleIncludes(source, nil)
 
 	if len(inclusions) != 1 {
 		t.Fatalf("expected 1 inclusion, got %d", len(inclusions))
@@ -279,7 +279,7 @@ func BenchmarkPreProcessingHandleIncludes_NoIncludes(b *testing.B) {
 	source := "mov rax, 1\nmov rdi, 0\nsyscall\n"
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingHandleIncludes(source, nil)
+		preProcessing.HandleIncludes(source, nil)
 	}
 }
 
@@ -291,7 +291,7 @@ func BenchmarkPreProcessingHandleIncludes_SingleInclude(b *testing.B) {
 	source := `%include "` + path + `"`
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingHandleIncludes(source, nil)
+		preProcessing.HandleIncludes(source, nil)
 	}
 }
 
@@ -306,7 +306,7 @@ func BenchmarkPreProcessingHandleIncludes_MultipleIncludes(b *testing.B) {
 	source := sb.String()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingHandleIncludes(source, nil)
+		preProcessing.HandleIncludes(source, nil)
 	}
 }
 
@@ -323,7 +323,7 @@ func BenchmarkPreProcessingHandleIncludes_LargeIncludedFile(b *testing.B) {
 	source := `%include "` + path + `"`
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingHandleIncludes(source, nil)
+		preProcessing.HandleIncludes(source, nil)
 	}
 }
 
@@ -338,7 +338,7 @@ func BenchmarkPreProcessingHandleIncludes_ManyIncludes(b *testing.B) {
 	source := sb.String()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingHandleIncludes(source, nil)
+		preProcessing.HandleIncludes(source, nil)
 	}
 }
 
@@ -355,6 +355,6 @@ func BenchmarkPreProcessingHandleIncludes_IncludeDeepInSource(b *testing.B) {
 	source := sb.String()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingHandleIncludes(source, nil)
+		preProcessing.HandleIncludes(source, nil)
 	}
 }

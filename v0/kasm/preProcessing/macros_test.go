@@ -1,11 +1,11 @@
-package kasm_test
+package preProcessing_test
 
 import (
 	"fmt"
 	"strings"
 	"testing"
 
-	"github.com/keurnel/assembler/v0/kasm"
+	"github.com/keurnel/assembler/v0/kasm/preProcessing"
 )
 
 // --- PreProcessingHasMacros ---
@@ -15,7 +15,7 @@ func TestPreProcessingHasMacros_WithMacro(t *testing.T) {
     mov rax, %1
     mov rdi, %2
 %endmacro`
-	if !kasm.PreProcessingHasMacros(source) {
+	if !preProcessing.HasMacros(source) {
 		t.Error("expected true for source containing a macro definition")
 	}
 }
@@ -23,13 +23,13 @@ func TestPreProcessingHasMacros_WithMacro(t *testing.T) {
 func TestPreProcessingHasMacros_WithoutMacro(t *testing.T) {
 	source := `mov rax, 1
 mov rdi, 2`
-	if kasm.PreProcessingHasMacros(source) {
+	if preProcessing.HasMacros(source) {
 		t.Error("expected false for source without macro definitions")
 	}
 }
 
 func TestPreProcessingHasMacros_EmptySource(t *testing.T) {
-	if kasm.PreProcessingHasMacros("") {
+	if preProcessing.HasMacros("") {
 		t.Error("expected false for empty source")
 	}
 }
@@ -38,7 +38,7 @@ func TestPreProcessingHasMacros_MacroWithoutParams(t *testing.T) {
 	source := `%macro nop_macro
     nop
 %endmacro`
-	if !kasm.PreProcessingHasMacros(source) {
+	if !preProcessing.HasMacros(source) {
 		t.Error("expected true for macro without parameter count")
 	}
 }
@@ -50,7 +50,7 @@ func TestPreProcessingMacroTable_SingleMacro(t *testing.T) {
     mov rax, %1
     mov rdi, %2
 %endmacro`
-	table := kasm.PreProcessingMacroTable(source)
+	table := preProcessing.MacroTable(source)
 
 	if len(table) != 1 {
 		t.Fatalf("expected 1 macro, got %d", len(table))
@@ -83,7 +83,7 @@ func TestPreProcessingMacroTable_MultipleMacros(t *testing.T) {
     mov rbx, %2
     mov rcx, %3
 %endmacro`
-	table := kasm.PreProcessingMacroTable(source)
+	table := preProcessing.MacroTable(source)
 
 	if len(table) != 2 {
 		t.Fatalf("expected 2 macros, got %d", len(table))
@@ -106,7 +106,7 @@ func TestPreProcessingMacroTable_MultipleMacros(t *testing.T) {
 
 func TestPreProcessingMacroTable_NoMacros(t *testing.T) {
 	source := `mov rax, 1`
-	table := kasm.PreProcessingMacroTable(source)
+	table := preProcessing.MacroTable(source)
 
 	if len(table) != 0 {
 		t.Errorf("expected 0 macros, got %d", len(table))
@@ -119,7 +119,7 @@ func TestPreProcessingMacroTable_ParameterNaming(t *testing.T) {
     mov rbx, %2
     mov rcx, %3
 %endmacro`
-	table := kasm.PreProcessingMacroTable(source)
+	table := preProcessing.MacroTable(source)
 	macro := table["test_macro"]
 
 	expectedParams := []string{"paramA", "paramB", "paramC"}
@@ -139,8 +139,8 @@ func TestPreProcessingCollectMacroCalls_SingleCall(t *testing.T) {
 %endmacro
 my_macro 1, 2`
 
-	table := kasm.PreProcessingMacroTable(source)
-	kasm.PreProcessingCollectMacroCalls(source, table)
+	table := preProcessing.MacroTable(source)
+	preProcessing.CollectMacroCalls(source, table)
 
 	macro := table["my_macro"]
 	if len(macro.Calls) != 1 {
@@ -167,8 +167,8 @@ func TestPreProcessingCollectMacroCalls_MultipleCalls(t *testing.T) {
 my_macro 1, 2
 my_macro 3, 4`
 
-	table := kasm.PreProcessingMacroTable(source)
-	kasm.PreProcessingCollectMacroCalls(source, table)
+	table := preProcessing.MacroTable(source)
+	preProcessing.CollectMacroCalls(source, table)
 
 	macro := table["my_macro"]
 	if len(macro.Calls) != 2 {
@@ -183,7 +183,7 @@ func TestPreProcessingCollectMacroCalls_WrongArgCount_Panics(t *testing.T) {
 %endmacro
 my_macro 1`
 
-	table := kasm.PreProcessingMacroTable(source)
+	table := preProcessing.MacroTable(source)
 
 	defer func() {
 		r := recover()
@@ -199,7 +199,7 @@ my_macro 1`
 		}
 	}()
 
-	kasm.PreProcessingCollectMacroCalls(source, table)
+	preProcessing.CollectMacroCalls(source, table)
 }
 
 func TestPreProcessingCollectMacroCalls_LineNumber(t *testing.T) {
@@ -209,8 +209,8 @@ func TestPreProcessingCollectMacroCalls_LineNumber(t *testing.T) {
 ; comment line
 my_macro 42`
 
-	table := kasm.PreProcessingMacroTable(source)
-	kasm.PreProcessingCollectMacroCalls(source, table)
+	table := preProcessing.MacroTable(source)
+	preProcessing.CollectMacroCalls(source, table)
 
 	macro := table["my_macro"]
 	if len(macro.Calls) != 1 {
@@ -230,9 +230,9 @@ func TestPreProcessingReplaceMacroCalls_BasicExpansion(t *testing.T) {
 %endmacro
 my_macro 1, 2`
 
-	table := kasm.PreProcessingMacroTable(source)
-	kasm.PreProcessingCollectMacroCalls(source, table)
-	result := kasm.PreProcessingReplaceMacroCalls(source, table)
+	table := preProcessing.MacroTable(source)
+	preProcessing.CollectMacroCalls(source, table)
+	result := preProcessing.ReplaceMacroCalls(source, table)
 
 	if containsSubstring(result, "my_macro 1, 2") {
 		t.Error("expected macro call to be replaced")
@@ -254,9 +254,9 @@ func TestPreProcessingReplaceMacroCalls_StripsIndentation(t *testing.T) {
 %endmacro
 my_macro 42`
 
-	table := kasm.PreProcessingMacroTable(source)
-	kasm.PreProcessingCollectMacroCalls(source, table)
-	result := kasm.PreProcessingReplaceMacroCalls(source, table)
+	table := preProcessing.MacroTable(source)
+	preProcessing.CollectMacroCalls(source, table)
+	result := preProcessing.ReplaceMacroCalls(source, table)
 
 	if containsSubstring(result, "    mov rax, 42") {
 		t.Error("expected leading indentation to be stripped from expanded body")
@@ -288,7 +288,7 @@ func TestPreProcessingMacroTable_NoEndmacro_Panics(t *testing.T) {
 			t.Errorf("expected panic message to mention endmacro, got: %s", msg)
 		}
 	}()
-	kasm.PreProcessingMacroTable(source)
+	preProcessing.MacroTable(source)
 }
 
 // --- FR-2.5: Macro definition removal ---
@@ -299,9 +299,9 @@ func TestPreProcessingReplaceMacroCalls_RemovesDefinitionBlock(t *testing.T) {
 %endmacro
 my_macro 42`
 
-	table := kasm.PreProcessingMacroTable(source)
-	kasm.PreProcessingCollectMacroCalls(source, table)
-	result := kasm.PreProcessingReplaceMacroCalls(source, table)
+	table := preProcessing.MacroTable(source)
+	preProcessing.CollectMacroCalls(source, table)
+	result := preProcessing.ReplaceMacroCalls(source, table)
 
 	if containsSubstring(result, "%macro") {
 		t.Error("expected macro definition to be removed from output")
@@ -320,9 +320,9 @@ func TestPreProcessingReplaceMacroCalls_RemovesUnusedDefinition(t *testing.T) {
 %endmacro
 mov rbx, 1`
 
-	table := kasm.PreProcessingMacroTable(source)
-	kasm.PreProcessingCollectMacroCalls(source, table)
-	result := kasm.PreProcessingReplaceMacroCalls(source, table)
+	table := preProcessing.MacroTable(source)
+	preProcessing.CollectMacroCalls(source, table)
+	result := preProcessing.ReplaceMacroCalls(source, table)
 
 	if containsSubstring(result, "%macro") {
 		t.Error("expected unused macro definition to be removed (FR-2.5.3)")
@@ -345,9 +345,9 @@ func TestPreProcessingReplaceMacroCalls_RemovesMultipleDefinitions(t *testing.T)
 mac_a 1
 mac_b 2`
 
-	table := kasm.PreProcessingMacroTable(source)
-	kasm.PreProcessingCollectMacroCalls(source, table)
-	result := kasm.PreProcessingReplaceMacroCalls(source, table)
+	table := preProcessing.MacroTable(source)
+	preProcessing.CollectMacroCalls(source, table)
+	result := preProcessing.ReplaceMacroCalls(source, table)
 
 	if containsSubstring(result, "%macro") {
 		t.Error("expected all macro definitions to be removed")
@@ -381,7 +381,7 @@ func BenchmarkPreProcessingHasMacros_NoMacros(b *testing.B) {
 	source := "mov rax, 1\nmov rdi, 0\nsyscall\n"
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingHasMacros(source)
+		preProcessing.HasMacros(source)
 	}
 }
 
@@ -392,7 +392,7 @@ func BenchmarkPreProcessingHasMacros_WithMacro(b *testing.B) {
 %endmacro`
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingHasMacros(source)
+		preProcessing.HasMacros(source)
 	}
 }
 
@@ -404,7 +404,7 @@ func BenchmarkPreProcessingHasMacros_LargeSource_NoMacro(b *testing.B) {
 	source := sb.String()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingHasMacros(source)
+		preProcessing.HasMacros(source)
 	}
 }
 
@@ -417,7 +417,7 @@ func BenchmarkPreProcessingHasMacros_LargeSource_MacroAtEnd(b *testing.B) {
 	source := sb.String()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingHasMacros(source)
+		preProcessing.HasMacros(source)
 	}
 }
 
@@ -427,7 +427,7 @@ func BenchmarkPreProcessingMacroTable_NoMacros(b *testing.B) {
 	source := "mov rax, 1\nmov rdi, 0\nsyscall\n"
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingMacroTable(source)
+		preProcessing.MacroTable(source)
 	}
 }
 
@@ -438,7 +438,7 @@ func BenchmarkPreProcessingMacroTable_SingleMacro(b *testing.B) {
 %endmacro`
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingMacroTable(source)
+		preProcessing.MacroTable(source)
 	}
 }
 
@@ -450,7 +450,7 @@ func BenchmarkPreProcessingMacroTable_ManyMacros(b *testing.B) {
 	source := sb.String()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingMacroTable(source)
+		preProcessing.MacroTable(source)
 	}
 }
 
@@ -464,7 +464,7 @@ func BenchmarkPreProcessingMacroTable_MacroWithLargeBody(b *testing.B) {
 	source := body.String()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingMacroTable(source)
+		preProcessing.MacroTable(source)
 	}
 }
 
@@ -476,12 +476,12 @@ func BenchmarkPreProcessingCollectMacroCalls_NoCalls(b *testing.B) {
     mov rdi, %2
 %endmacro
 mov rax, 1`
-	table := kasm.PreProcessingMacroTable(source)
+	table := preProcessing.MacroTable(source)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		// Reset calls each iteration by rebuilding the table
-		t2 := kasm.PreProcessingMacroTable(source)
-		kasm.PreProcessingCollectMacroCalls(source, t2)
+		t2 := preProcessing.MacroTable(source)
+		preProcessing.CollectMacroCalls(source, t2)
 		_ = t2
 	}
 	_ = table
@@ -495,8 +495,8 @@ func BenchmarkPreProcessingCollectMacroCalls_SingleCall(b *testing.B) {
 my_macro 1, 2`
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		table := kasm.PreProcessingMacroTable(source)
-		kasm.PreProcessingCollectMacroCalls(source, table)
+		table := preProcessing.MacroTable(source)
+		preProcessing.CollectMacroCalls(source, table)
 	}
 }
 
@@ -509,8 +509,8 @@ func BenchmarkPreProcessingCollectMacroCalls_ManyCalls(b *testing.B) {
 	source := sb.String()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		table := kasm.PreProcessingMacroTable(source)
-		kasm.PreProcessingCollectMacroCalls(source, table)
+		table := preProcessing.MacroTable(source)
+		preProcessing.CollectMacroCalls(source, table)
 	}
 }
 
@@ -527,8 +527,8 @@ func BenchmarkPreProcessingCollectMacroCalls_MultipleMacros(b *testing.B) {
 	source := sb.String()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		table := kasm.PreProcessingMacroTable(source)
-		kasm.PreProcessingCollectMacroCalls(source, table)
+		table := preProcessing.MacroTable(source)
+		preProcessing.CollectMacroCalls(source, table)
 	}
 }
 
@@ -540,11 +540,11 @@ func BenchmarkPreProcessingReplaceMacroCalls_SingleCall(b *testing.B) {
     mov rdi, %2
 %endmacro
 my_macro 1, 2`
-	table := kasm.PreProcessingMacroTable(source)
-	kasm.PreProcessingCollectMacroCalls(source, table)
+	table := preProcessing.MacroTable(source)
+	preProcessing.CollectMacroCalls(source, table)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingReplaceMacroCalls(source, table)
+		preProcessing.ReplaceMacroCalls(source, table)
 	}
 }
 
@@ -555,11 +555,11 @@ func BenchmarkPreProcessingReplaceMacroCalls_ManyCalls(b *testing.B) {
 		sb.WriteString(fmt.Sprintf("my_macro %d, %d\n", i, i+1))
 	}
 	source := sb.String()
-	table := kasm.PreProcessingMacroTable(source)
-	kasm.PreProcessingCollectMacroCalls(source, table)
+	table := preProcessing.MacroTable(source)
+	preProcessing.CollectMacroCalls(source, table)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingReplaceMacroCalls(source, table)
+		preProcessing.ReplaceMacroCalls(source, table)
 	}
 }
 
@@ -571,11 +571,11 @@ func BenchmarkPreProcessingReplaceMacroCalls_LargeBody(b *testing.B) {
 	}
 	body.WriteString("%endmacro\nbig_macro rax, rbx\n")
 	source := body.String()
-	table := kasm.PreProcessingMacroTable(source)
-	kasm.PreProcessingCollectMacroCalls(source, table)
+	table := preProcessing.MacroTable(source)
+	preProcessing.CollectMacroCalls(source, table)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingReplaceMacroCalls(source, table)
+		preProcessing.ReplaceMacroCalls(source, table)
 	}
 }
 
@@ -588,10 +588,10 @@ func BenchmarkPreProcessingReplaceMacroCalls_MultipleMacros(b *testing.B) {
 		sb.WriteString(fmt.Sprintf("mac_%d %d\n", i, i*10))
 	}
 	source := sb.String()
-	table := kasm.PreProcessingMacroTable(source)
-	kasm.PreProcessingCollectMacroCalls(source, table)
+	table := preProcessing.MacroTable(source)
+	preProcessing.CollectMacroCalls(source, table)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingReplaceMacroCalls(source, table)
+		preProcessing.ReplaceMacroCalls(source, table)
 	}
 }

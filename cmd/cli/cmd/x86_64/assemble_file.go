@@ -12,6 +12,7 @@ import (
 	"github.com/keurnel/assembler/v0/architecture/x86/_64"
 	"github.com/keurnel/assembler/v0/kasm"
 	"github.com/keurnel/assembler/v0/kasm/dependency_graph"
+	"github.com/keurnel/assembler/v0/kasm/preProcessing"
 	"github.com/keurnel/assembler/v0/kasm/profile"
 	"github.com/spf13/cobra"
 )
@@ -341,8 +342,8 @@ func preProcessIncludes(source string, rootFilePath string, tracker *lineMap.Tra
 	// of %include directives. The loop continues until no new inclusions are
 	// found (the source is fully resolved) or a circular inclusion is detected.
 	for {
-		var inclusions []kasm.PreProcessingInclusion
-		source, inclusions = kasm.PreProcessingHandleIncludes(source, seen)
+		var inclusions []preProcessing.Inclusion
+		source, inclusions = preProcessing.HandleIncludes(source, seen)
 
 		if len(inclusions) == 0 {
 			break
@@ -385,9 +386,9 @@ func preProcessIncludes(source string, rootFilePath string, tracker *lineMap.Tra
 func preProcessMacros(source string, tracker *lineMap.Tracker, debugCtx *debugcontext.DebugContext) string {
 	debugCtx.SetPhase("pre-processing/macros")
 
-	macros := kasm.PreProcessingMacroTable(source)
-	kasm.PreProcessingCollectMacroCalls(source, macros)
-	source = kasm.PreProcessingReplaceMacroCalls(source, macros)
+	macros := preProcessing.MacroTable(source)
+	preProcessing.CollectMacroCalls(source, macros)
+	source = preProcessing.ReplaceMacroCalls(source, macros)
 
 	tracker.Snapshot(source)
 	debugCtx.Trace(debugCtx.Loc(0, 0), fmt.Sprintf("expanded %d macro(s)", len(macros)))
@@ -399,9 +400,9 @@ func preProcessMacros(source string, tracker *lineMap.Tracker, debugCtx *debugco
 func preProcessConditionals(source string, tracker *lineMap.Tracker, debugCtx *debugcontext.DebugContext) string {
 	debugCtx.SetPhase("pre-processing/conditionals")
 
-	macros := kasm.PreProcessingMacroTable(source)
-	symbolTable := kasm.PreProcessingCreateSymbolTable(source, macros)
-	source = kasm.PreProcessingHandleConditionals(source, symbolTable)
+	macros := preProcessing.MacroTable(source)
+	symbolTable := preProcessing.CreateSymbolTable(source, macros)
+	source = preProcessing.HandleConditionals(source, symbolTable)
 
 	tracker.Snapshot(source)
 	debugCtx.Trace(debugCtx.Loc(0, 0), fmt.Sprintf("evaluated conditionals with %d symbol(s)", len(symbolTable)))

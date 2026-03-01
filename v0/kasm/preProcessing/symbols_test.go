@@ -1,18 +1,18 @@
-package kasm_test
+package preProcessing_test
 
 import (
 	"fmt"
 	"strings"
 	"testing"
 
-	"github.com/keurnel/assembler/v0/kasm"
+	"github.com/keurnel/assembler/v0/kasm/preProcessing"
 )
 
 // --- PreProcessingCreateSymbolTable: %define ---
 
 func TestPreProcessingCreateSymbolTable_SingleDefine(t *testing.T) {
 	source := `%define DEBUG`
-	symbols := kasm.PreProcessingCreateSymbolTable(source, nil)
+	symbols := preProcessing.CreateSymbolTable(source, nil)
 
 	if !symbols["DEBUG"] {
 		t.Error("expected 'DEBUG' to be defined")
@@ -26,7 +26,7 @@ func TestPreProcessingCreateSymbolTable_MultipleDefines(t *testing.T) {
 	source := `%define DEBUG
 %define VERBOSE
 %define TRACE`
-	symbols := kasm.PreProcessingCreateSymbolTable(source, nil)
+	symbols := preProcessing.CreateSymbolTable(source, nil)
 
 	if len(symbols) != 3 {
 		t.Fatalf("expected 3 symbols, got %d", len(symbols))
@@ -41,7 +41,7 @@ func TestPreProcessingCreateSymbolTable_MultipleDefines(t *testing.T) {
 
 func TestPreProcessingCreateSymbolTable_NoDefines(t *testing.T) {
 	source := `mov rax, 1`
-	symbols := kasm.PreProcessingCreateSymbolTable(source, nil)
+	symbols := preProcessing.CreateSymbolTable(source, nil)
 
 	if len(symbols) != 0 {
 		t.Errorf("expected 0 symbols, got %d", len(symbols))
@@ -49,7 +49,7 @@ func TestPreProcessingCreateSymbolTable_NoDefines(t *testing.T) {
 }
 
 func TestPreProcessingCreateSymbolTable_EmptySource(t *testing.T) {
-	symbols := kasm.PreProcessingCreateSymbolTable("", nil)
+	symbols := preProcessing.CreateSymbolTable("", nil)
 
 	if len(symbols) != 0 {
 		t.Errorf("expected 0 symbols, got %d", len(symbols))
@@ -73,7 +73,7 @@ func TestPreProcessingCreateSymbolTable_DuplicateDefine_Panics(t *testing.T) {
 
 	source := `%define DEBUG
 %define DEBUG`
-	kasm.PreProcessingCreateSymbolTable(source, nil)
+	preProcessing.CreateSymbolTable(source, nil)
 }
 
 func TestPreProcessingCreateSymbolTable_DuplicateDefine_ReportsLineNumbers(t *testing.T) {
@@ -97,19 +97,19 @@ func TestPreProcessingCreateSymbolTable_DuplicateDefine_ReportsLineNumbers(t *te
 	source := `%define DEBUG
 ; comment
 %define DEBUG`
-	kasm.PreProcessingCreateSymbolTable(source, nil)
+	preProcessing.CreateSymbolTable(source, nil)
 }
 
 // --- PreProcessingCreateSymbolTable: macros as symbols ---
 
 func TestPreProcessingCreateSymbolTable_MacrosAddedAsSymbols(t *testing.T) {
 	source := ``
-	macroTable := map[string]kasm.Macro{
+	macroTable := map[string]preProcessing.Macro{
 		"my_macro": {
 			Name: "my_macro",
 		},
 	}
-	symbols := kasm.PreProcessingCreateSymbolTable(source, macroTable)
+	symbols := preProcessing.CreateSymbolTable(source, macroTable)
 
 	if !symbols["my_macro"] {
 		t.Error("expected macro 'my_macro' to be in symbol table")
@@ -118,12 +118,12 @@ func TestPreProcessingCreateSymbolTable_MacrosAddedAsSymbols(t *testing.T) {
 
 func TestPreProcessingCreateSymbolTable_DefinesAndMacrosCombined(t *testing.T) {
 	source := `%define DEBUG`
-	macroTable := map[string]kasm.Macro{
+	macroTable := map[string]preProcessing.Macro{
 		"my_macro": {
 			Name: "my_macro",
 		},
 	}
-	symbols := kasm.PreProcessingCreateSymbolTable(source, macroTable)
+	symbols := preProcessing.CreateSymbolTable(source, macroTable)
 
 	if len(symbols) != 2 {
 		t.Fatalf("expected 2 symbols, got %d", len(symbols))
@@ -138,7 +138,7 @@ func TestPreProcessingCreateSymbolTable_DefinesAndMacrosCombined(t *testing.T) {
 
 func TestPreProcessingCreateSymbolTable_NilMacroTable(t *testing.T) {
 	source := `%define FOO`
-	symbols := kasm.PreProcessingCreateSymbolTable(source, nil)
+	symbols := preProcessing.CreateSymbolTable(source, nil)
 
 	if len(symbols) != 1 {
 		t.Fatalf("expected 1 symbol, got %d", len(symbols))
@@ -150,12 +150,12 @@ func TestPreProcessingCreateSymbolTable_NilMacroTable(t *testing.T) {
 
 func TestPreProcessingCreateSymbolTable_MultipleMacros(t *testing.T) {
 	source := ``
-	macroTable := map[string]kasm.Macro{
+	macroTable := map[string]preProcessing.Macro{
 		"macro_a": {Name: "macro_a"},
 		"macro_b": {Name: "macro_b"},
 		"macro_c": {Name: "macro_c"},
 	}
-	symbols := kasm.PreProcessingCreateSymbolTable(source, macroTable)
+	symbols := preProcessing.CreateSymbolTable(source, macroTable)
 
 	if len(symbols) != 3 {
 		t.Fatalf("expected 3 symbols, got %d", len(symbols))
@@ -171,7 +171,7 @@ func TestPreProcessingCreateSymbolTable_MultipleMacros(t *testing.T) {
 
 func TestPreProcessingCreateSymbolTable_LeadingWhitespace(t *testing.T) {
 	source := `   %define DEBUG`
-	symbols := kasm.PreProcessingCreateSymbolTable(source, nil)
+	symbols := preProcessing.CreateSymbolTable(source, nil)
 
 	if !symbols["DEBUG"] {
 		t.Error("expected 'DEBUG' to be defined despite leading whitespace")
@@ -180,7 +180,7 @@ func TestPreProcessingCreateSymbolTable_LeadingWhitespace(t *testing.T) {
 
 func TestPreProcessingCreateSymbolTable_TabIndent(t *testing.T) {
 	source := "\t%define DEBUG"
-	symbols := kasm.PreProcessingCreateSymbolTable(source, nil)
+	symbols := preProcessing.CreateSymbolTable(source, nil)
 
 	if !symbols["DEBUG"] {
 		t.Error("expected 'DEBUG' to be defined despite tab indent")
@@ -192,7 +192,7 @@ func TestPreProcessingCreateSymbolTable_TabIndent(t *testing.T) {
 func TestPreProcessingCreateSymbolTable_IgnoresComments(t *testing.T) {
 	source := `; %define NOT_A_SYMBOL
 %define REAL_SYMBOL`
-	symbols := kasm.PreProcessingCreateSymbolTable(source, nil)
+	symbols := preProcessing.CreateSymbolTable(source, nil)
 
 	if len(symbols) != 1 {
 		t.Fatalf("expected 1 symbol, got %d", len(symbols))
@@ -210,7 +210,7 @@ func TestPreProcessingCreateSymbolTable_IgnoresInlineMacroDirectives(t *testing.
     mov rax, %1
 %endmacro
 %define ENABLED`
-	symbols := kasm.PreProcessingCreateSymbolTable(source, nil)
+	symbols := preProcessing.CreateSymbolTable(source, nil)
 
 	if !symbols["ENABLED"] {
 		t.Error("expected 'ENABLED' to be defined")
@@ -225,7 +225,7 @@ func BenchmarkPreProcessingCreateSymbolTable_NoDefines(b *testing.B) {
 	source := "mov rax, 1\nmov rdi, 0\nsyscall\n"
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingCreateSymbolTable(source, nil)
+		preProcessing.CreateSymbolTable(source, nil)
 	}
 }
 
@@ -233,7 +233,7 @@ func BenchmarkPreProcessingCreateSymbolTable_SingleDefine(b *testing.B) {
 	source := "%define DEBUG\nmov rax, 1\n"
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingCreateSymbolTable(source, nil)
+		preProcessing.CreateSymbolTable(source, nil)
 	}
 }
 
@@ -245,7 +245,7 @@ func BenchmarkPreProcessingCreateSymbolTable_ManyDefines(b *testing.B) {
 	source := sb.String()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingCreateSymbolTable(source, nil)
+		preProcessing.CreateSymbolTable(source, nil)
 	}
 }
 
@@ -260,32 +260,32 @@ func BenchmarkPreProcessingCreateSymbolTable_DefinesAtEnd(b *testing.B) {
 	source := sb.String()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingCreateSymbolTable(source, nil)
+		preProcessing.CreateSymbolTable(source, nil)
 	}
 }
 
 func BenchmarkPreProcessingCreateSymbolTable_WithMacroTable(b *testing.B) {
 	source := "%define DEBUG\n%define RELEASE\n"
-	macroTable := make(map[string]kasm.Macro, 20)
+	macroTable := make(map[string]preProcessing.Macro, 20)
 	for i := 0; i < 20; i++ {
 		name := fmt.Sprintf("macro_%d", i)
-		macroTable[name] = kasm.Macro{Name: name}
+		macroTable[name] = preProcessing.Macro{Name: name}
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingCreateSymbolTable(source, macroTable)
+		preProcessing.CreateSymbolTable(source, macroTable)
 	}
 }
 
 func BenchmarkPreProcessingCreateSymbolTable_OnlyMacroTable(b *testing.B) {
-	macroTable := make(map[string]kasm.Macro, 50)
+	macroTable := make(map[string]preProcessing.Macro, 50)
 	for i := 0; i < 50; i++ {
 		name := fmt.Sprintf("macro_%d", i)
-		macroTable[name] = kasm.Macro{Name: name}
+		macroTable[name] = preProcessing.Macro{Name: name}
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingCreateSymbolTable("", macroTable)
+		preProcessing.CreateSymbolTable("", macroTable)
 	}
 }
 
@@ -297,7 +297,7 @@ func BenchmarkPreProcessingCreateSymbolTable_LargeSource_NoDefines(b *testing.B)
 	source := sb.String()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingCreateSymbolTable(source, nil)
+		preProcessing.CreateSymbolTable(source, nil)
 	}
 }
 
@@ -307,13 +307,13 @@ func BenchmarkPreProcessingCreateSymbolTable_ManyDefinesWithMacros(b *testing.B)
 		sb.WriteString(fmt.Sprintf("%%define SYM_%d\n", i))
 	}
 	source := sb.String()
-	macroTable := make(map[string]kasm.Macro, 30)
+	macroTable := make(map[string]preProcessing.Macro, 30)
 	for i := 0; i < 30; i++ {
 		name := fmt.Sprintf("macro_%d", i)
-		macroTable[name] = kasm.Macro{Name: name}
+		macroTable[name] = preProcessing.Macro{Name: name}
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingCreateSymbolTable(source, macroTable)
+		preProcessing.CreateSymbolTable(source, macroTable)
 	}
 }

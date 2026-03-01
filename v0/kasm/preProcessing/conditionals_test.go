@@ -1,11 +1,11 @@
-package kasm_test
+package preProcessing_test
 
 import (
 	"fmt"
 	"strings"
 	"testing"
 
-	"github.com/keurnel/assembler/v0/kasm"
+	"github.com/keurnel/assembler/v0/kasm/preProcessing"
 )
 
 // --- PreProcessingHandleConditionals: %ifdef ---
@@ -15,7 +15,7 @@ func TestPreProcessingHandleConditionals_IfdefTrue(t *testing.T) {
 mov rax, 1
 %endif`
 	symbols := map[string]bool{"DEBUG": true}
-	result := kasm.PreProcessingHandleConditionals(source, symbols)
+	result := preProcessing.HandleConditionals(source, symbols)
 
 	if !containsSubstring(result, "mov rax, 1") {
 		t.Error("expected body to be included when symbol is defined")
@@ -30,7 +30,7 @@ func TestPreProcessingHandleConditionals_IfdefFalse(t *testing.T) {
 mov rax, 1
 %endif`
 	symbols := map[string]bool{}
-	result := kasm.PreProcessingHandleConditionals(source, symbols)
+	result := preProcessing.HandleConditionals(source, symbols)
 
 	if containsSubstring(result, "mov rax, 1") {
 		t.Error("expected body to be excluded when symbol is not defined")
@@ -44,7 +44,7 @@ func TestPreProcessingHandleConditionals_IfndefTrue(t *testing.T) {
 mov rax, 1
 %endif`
 	symbols := map[string]bool{}
-	result := kasm.PreProcessingHandleConditionals(source, symbols)
+	result := preProcessing.HandleConditionals(source, symbols)
 
 	if !containsSubstring(result, "mov rax, 1") {
 		t.Error("expected body to be included when symbol is NOT defined")
@@ -56,7 +56,7 @@ func TestPreProcessingHandleConditionals_IfndefFalse(t *testing.T) {
 mov rax, 1
 %endif`
 	symbols := map[string]bool{"RELEASE": true}
-	result := kasm.PreProcessingHandleConditionals(source, symbols)
+	result := preProcessing.HandleConditionals(source, symbols)
 
 	if containsSubstring(result, "mov rax, 1") {
 		t.Error("expected body to be excluded when symbol IS defined")
@@ -72,7 +72,7 @@ mov rax, 1
 mov rax, 0
 %endif`
 	symbols := map[string]bool{"DEBUG": true}
-	result := kasm.PreProcessingHandleConditionals(source, symbols)
+	result := preProcessing.HandleConditionals(source, symbols)
 
 	if !containsSubstring(result, "mov rax, 1") {
 		t.Error("expected ifdef branch to be included")
@@ -89,7 +89,7 @@ mov rax, 1
 mov rax, 0
 %endif`
 	symbols := map[string]bool{}
-	result := kasm.PreProcessingHandleConditionals(source, symbols)
+	result := preProcessing.HandleConditionals(source, symbols)
 
 	if containsSubstring(result, "mov rax, 1") {
 		t.Error("expected ifdef branch to be excluded")
@@ -109,7 +109,7 @@ mov rax, 1
 %endif
 %endif`
 	symbols := map[string]bool{"OUTER": true, "INNER": true}
-	result := kasm.PreProcessingHandleConditionals(source, symbols)
+	result := preProcessing.HandleConditionals(source, symbols)
 
 	if !containsSubstring(result, "mov rax, 1") {
 		t.Error("expected nested body to be included when both symbols are defined")
@@ -124,7 +124,7 @@ mov rax, 1
 %endif
 %endif`
 	symbols := map[string]bool{"INNER": true}
-	result := kasm.PreProcessingHandleConditionals(source, symbols)
+	result := preProcessing.HandleConditionals(source, symbols)
 
 	if containsSubstring(result, "mov rax, 1") {
 		t.Error("expected nested body to be excluded when outer symbol is not defined")
@@ -137,7 +137,7 @@ func TestPreProcessingHandleConditionals_NoConditionals(t *testing.T) {
 	source := `mov rax, 1
 mov rdi, 0`
 	symbols := map[string]bool{}
-	result := kasm.PreProcessingHandleConditionals(source, symbols)
+	result := preProcessing.HandleConditionals(source, symbols)
 
 	if result != source {
 		t.Errorf("expected source unchanged, got '%s'", result)
@@ -163,7 +163,7 @@ func TestPreProcessingHandleConditionals_UnmatchedEndif_Panics(t *testing.T) {
 
 	source := `mov rax, 1
 %endif`
-	kasm.PreProcessingHandleConditionals(source, map[string]bool{})
+	preProcessing.HandleConditionals(source, map[string]bool{})
 }
 
 func TestPreProcessingHandleConditionals_UnmatchedIfdef_Panics(t *testing.T) {
@@ -183,7 +183,7 @@ func TestPreProcessingHandleConditionals_UnmatchedIfdef_Panics(t *testing.T) {
 
 	source := `%ifdef DEBUG
 mov rax, 1`
-	kasm.PreProcessingHandleConditionals(source, map[string]bool{})
+	preProcessing.HandleConditionals(source, map[string]bool{})
 }
 
 func TestPreProcessingHandleConditionals_DuplicateElse_Panics(t *testing.T) {
@@ -208,7 +208,7 @@ mov rax, 0
 %else
 mov rax, 2
 %endif`
-	kasm.PreProcessingHandleConditionals(source, map[string]bool{"DEBUG": true})
+	preProcessing.HandleConditionals(source, map[string]bool{"DEBUG": true})
 }
 
 func TestPreProcessingHandleConditionals_ElseWithoutIfdef_Panics(t *testing.T) {
@@ -230,7 +230,7 @@ func TestPreProcessingHandleConditionals_ElseWithoutIfdef_Panics(t *testing.T) {
 %else
 mov rax, 0
 %endif`
-	kasm.PreProcessingHandleConditionals(source, map[string]bool{})
+	preProcessing.HandleConditionals(source, map[string]bool{})
 }
 
 // --- PreProcessingHandleConditionals: surrounding code preserved ---
@@ -242,7 +242,7 @@ mov rbx, 1
 %endif
 mov rcx, 2`
 	symbols := map[string]bool{"DEBUG": true}
-	result := kasm.PreProcessingHandleConditionals(source, symbols)
+	result := preProcessing.HandleConditionals(source, symbols)
 
 	if !containsSubstring(result, "mov rax, 0") {
 		t.Error("expected code before block to be preserved")
@@ -262,7 +262,7 @@ mov rbx, 1
 %endif
 mov rcx, 2`
 	symbols := map[string]bool{}
-	result := kasm.PreProcessingHandleConditionals(source, symbols)
+	result := preProcessing.HandleConditionals(source, symbols)
 
 	if !containsSubstring(result, "mov rax, 0") {
 		t.Error("expected code before block to be preserved")
@@ -278,7 +278,7 @@ mov rcx, 2`
 // --- PreProcessingHandleConditionals: empty source ---
 
 func TestPreProcessingHandleConditionals_EmptySource(t *testing.T) {
-	result := kasm.PreProcessingHandleConditionals("", map[string]bool{})
+	result := preProcessing.HandleConditionals("", map[string]bool{})
 	if result != "" {
 		t.Errorf("expected empty result, got '%s'", result)
 	}
@@ -293,7 +293,7 @@ mov rax, 1
 mov rax, 0
 %endif`
 	symbols := map[string]bool{}
-	result := kasm.PreProcessingHandleConditionals(source, symbols)
+	result := preProcessing.HandleConditionals(source, symbols)
 
 	if !containsSubstring(result, "mov rax, 1") {
 		t.Error("expected ifndef branch when symbol is not defined")
@@ -310,7 +310,7 @@ mov rax, 1
 mov rax, 0
 %endif`
 	symbols := map[string]bool{"RELEASE": true}
-	result := kasm.PreProcessingHandleConditionals(source, symbols)
+	result := preProcessing.HandleConditionals(source, symbols)
 
 	result = strings.TrimSpace(result)
 
@@ -327,7 +327,7 @@ func BenchmarkPreProcessingHandleConditionals_NoDirectives(b *testing.B) {
 	symbols := map[string]bool{}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingHandleConditionals(source, symbols)
+		preProcessing.HandleConditionals(source, symbols)
 	}
 }
 
@@ -338,7 +338,7 @@ mov rax, 1
 	symbols := map[string]bool{"DEBUG": true}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingHandleConditionals(source, symbols)
+		preProcessing.HandleConditionals(source, symbols)
 	}
 }
 
@@ -349,7 +349,7 @@ mov rax, 1
 	symbols := map[string]bool{}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingHandleConditionals(source, symbols)
+		preProcessing.HandleConditionals(source, symbols)
 	}
 }
 
@@ -362,7 +362,7 @@ mov rax, 0
 	symbols := map[string]bool{"DEBUG": true}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingHandleConditionals(source, symbols)
+		preProcessing.HandleConditionals(source, symbols)
 	}
 }
 
@@ -375,7 +375,7 @@ mov rax, 0
 	symbols := map[string]bool{}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingHandleConditionals(source, symbols)
+		preProcessing.HandleConditionals(source, symbols)
 	}
 }
 
@@ -394,7 +394,7 @@ mov rsi, 5`
 	symbols := map[string]bool{"DEBUG": true}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingHandleConditionals(source, symbols)
+		preProcessing.HandleConditionals(source, symbols)
 	}
 }
 
@@ -411,7 +411,7 @@ func BenchmarkPreProcessingHandleConditionals_ManyBlocks(b *testing.B) {
 	source := sb.String()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingHandleConditionals(source, symbols)
+		preProcessing.HandleConditionals(source, symbols)
 	}
 }
 
@@ -426,7 +426,7 @@ func BenchmarkPreProcessingHandleConditionals_LargeBody(b *testing.B) {
 	symbols := map[string]bool{"DEBUG": true}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingHandleConditionals(source, symbols)
+		preProcessing.HandleConditionals(source, symbols)
 	}
 }
 
@@ -434,6 +434,6 @@ func BenchmarkPreProcessingHandleConditionals_EmptySource(b *testing.B) {
 	symbols := map[string]bool{}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingHandleConditionals("", symbols)
+		preProcessing.HandleConditionals("", symbols)
 	}
 }
