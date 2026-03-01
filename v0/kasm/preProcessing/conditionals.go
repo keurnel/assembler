@@ -15,7 +15,7 @@ var defineStripRegex = regexp.MustCompile(`(?m)^\s*%define\s+\w+\s*\n?`)
 // PreProcessingHandleConditionals evaluates conditional assembly blocks
 // (%ifdef, %ifndef, %else, %endif) and produces a source string with only
 // the active branches retained. Directive lines are removed from the output.
-func PreProcessingHandleConditionals(source string, definedSymbols map[string]bool) string {
+func HandleConditionals(source string, definedSymbols map[string]bool) string {
 
 	// When the source is empty, there is nothing
 	// to process, so we can return it immediately.

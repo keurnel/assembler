@@ -10,5 +10,5 @@ type (
 	MacroParameter         = preProcessing.MacroParameter
 	MacroCall              = preProcessing.MacroCall
 	Macro                  = preProcessing.Macro
-	PreProcessingInclusion = preProcessing.PreProcessingInclusion
+	PreProcessingInclusion = preProcessing.Inclusion
 )

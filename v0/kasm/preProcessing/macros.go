@@ -16,16 +16,16 @@ var (
 
 // PreProcessingHasMacros returns true if the source contains at least one
 // %macro directive, false otherwise. Used as an early-exit check.
-func PreProcessingHasMacros(source string) bool {
+func HasMacros(source string) bool {
 	return macroDetectRegex.MatchString(source)
 }
 
-// PreProcessingMacroTable extracts macro definitions from the source code and
+// MacroTable extracts macro definitions from the source code and
 // returns a map of Macro structs indexed by their names. Returns an empty map
 // if no macros are found.
-func PreProcessingMacroTable(source string) map[string]Macro {
+func MacroTable(source string) map[string]Macro {
 	macroTable := make(map[string]Macro)
-	if !PreProcessingHasMacros(source) {
+	if !HasMacros(source) {
 		return macroTable
 	}
 
@@ -73,7 +73,7 @@ func PreProcessingMacroTable(source string) map[string]Macro {
 // PreProcessingCollectMacroCalls scans the source for invocations of each macro
 // in the provided table and appends found calls to Macro.Calls.
 // This function mutates macroTable in place — the caller's map is updated directly.
-func PreProcessingCollectMacroCalls(source string, macroTable map[string]Macro) {
+func CollectMacroCalls(source string, macroTable map[string]Macro) {
 	for macroName, macro := range macroTable {
 		// Per-value regex: depends on the macro name, compiled once per macro (AR-6.4).
 		pattern := `(?m)^[^\S\n]*` + regexp.QuoteMeta(macroName) + `\s+(.+)$`
@@ -120,7 +120,7 @@ func PreProcessingCollectMacroCalls(source string, macroTable map[string]Macro) 
 // with their expanded bodies based on the provided macro table. Placeholders
 // (%1, %2, …) are substituted with the call's arguments. Returns the
 // transformed source string.
-func PreProcessingReplaceMacroCalls(source string, macroTable map[string]Macro) string {
+func ReplaceMacroCalls(source string, macroTable map[string]Macro) string {
 	for _, macro := range macroTable {
 		for _, call := range macro.Calls {
 			expandedBody := macro.Body

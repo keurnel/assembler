@@ -23,7 +23,7 @@ var defineDirectiveRegex = regexp.MustCompile(`(?m)^\s*%define\s+(\w+)\s*$`)
 //  2. Detect duplicate %define directives and panic if any are found.
 //  3. Add all macro names from the macro table as defined symbols.
 //     Returns the completed symbol table.
-func PreProcessingCreateSymbolTable(source string, macroTable map[string]Macro) map[string]bool {
+func CreateSymbolTable(source string, macroTable map[string]Macro) map[string]bool {
 	// Early-exit: if no %define directives exist, skip regex processing (AR-8.2).
 	hasDefines := strings.Contains(source, "%define")
 

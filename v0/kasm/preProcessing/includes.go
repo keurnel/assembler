@@ -32,7 +32,7 @@ var includeDirectiveRegex = regexp.MustCompile(`(?m)^\s*%include\s+"([^"]+)"\s*$
 //     wrapped in ; FILE: and ; END FILE: comments for traceability. Only the first
 //     match is replaced. After inlining, any remaining %include directives for
 //     shared or duplicate paths are stripped from the source.
-func PreProcessingHandleIncludes(source string, alreadyIncluded map[string]bool) (string, []PreProcessingInclusion) {
+func HandleIncludes(source string, alreadyIncluded map[string]bool) (string, []Inclusion) {
 	// Early-exit: if the source is empty, skip all processing (AR-8.1).
 	if len(source) == 0 {
 		return source, nil
@@ -46,7 +46,7 @@ func PreProcessingHandleIncludes(source string, alreadyIncluded map[string]bool)
 	matches := includeDirectiveRegex.FindAllStringSubmatchIndex(source, -1)
 
 	// Pre-allocate with known capacity to avoid repeated slice growth
-	inclusions := make([]PreProcessingInclusion, 0, len(matches))
+	inclusions := make([]Inclusion, 0, len(matches))
 
 	// FR-1.7: Collect paths that should be silently stripped (shared dependencies).
 	var sharedPaths []string
@@ -79,7 +79,7 @@ func PreProcessingHandleIncludes(source string, alreadyIncluded map[string]bool)
 			continue
 		}
 
-		inclusions = append(inclusions, PreProcessingInclusion{
+		inclusions = append(inclusions, Inclusion{
 			IncludedFilePath: includedFilePath,
 			LineNumber:       lineNumber,
 		})
@@ -89,7 +89,7 @@ func PreProcessingHandleIncludes(source string, alreadyIncluded map[string]bool)
 	// FR-1.7: A shared dependency may appear in multiple included files. The
 	// first occurrence is kept; subsequent duplicates are silently stripped.
 	seen := make(map[string]bool, len(inclusions))
-	deduplicated := make([]PreProcessingInclusion, 0, len(inclusions))
+	deduplicated := make([]Inclusion, 0, len(inclusions))
 	for _, inclusion := range inclusions {
 		if seen[inclusion.IncludedFilePath] {
 			// FR-1.7.3: Duplicate within this invocation — will be stripped after inlining.

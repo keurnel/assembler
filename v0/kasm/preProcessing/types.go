@@ -20,8 +20,8 @@ type Macro struct {
 	Calls      []MacroCall               // Calls to this macro found in the source code
 }
 
-// PreProcessingInclusion represents a single %include directive found in the source code.
-type PreProcessingInclusion struct {
+// Inclusion represents a single %include directive found in the source code.
+type Inclusion struct {
 	IncludedFilePath string // Path of the included file
 	LineNumber       int    // Line number in the source code where the inclusion occurs (for error reporting and debugging)
 }
