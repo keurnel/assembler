@@ -1,0 +1,6 @@
+; FILE: circular-dep.kasm
+; FILE: shared-module.kasm
+
+; END FILE: shared-module.kasm
+
+; END FILE: circular-dep.kasm

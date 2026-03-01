@@ -72,6 +72,9 @@ func runAssembleFile(cmd *cobra.Command, args []string) error {
 
 	source = preProcess(source, fullPath, tracker, debugCtx)
 
+	// Write source to file
+	os.WriteFile("preprocessed.kasm", []byte(source), 0644)
+
 	// Print debug context entries when verbose mode is enabled.
 	if verbose {
 		for _, e := range debugCtx.Entries() {
@@ -288,7 +291,7 @@ func preProcessIncludes(source string, rootFilePath string, tracker *lineMap.Tra
 	// found (the source is fully resolved) or a circular inclusion is detected.
 	for {
 		var inclusions []kasm.PreProcessingInclusion
-		source, inclusions = kasm.PreProcessingHandleIncludes(source)
+		source, inclusions = kasm.PreProcessingHandleIncludes(source, seen)
 
 		if len(inclusions) == 0 {
 			break

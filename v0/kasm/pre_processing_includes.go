@@ -16,13 +16,23 @@ var includeDirectiveRegex = regexp.MustCompile(`(?m)^\s*%include\s+"([^"]+)"\s*$
 //
 // Only .kasm files may be included; any other file extension is a pre-processing error.
 //
+// The alreadyIncluded set contains file paths that have been inlined by a
+// previous invocation (FR-1.7: Shared Dependency Deduplication). When a
+// %include directive references a path in this set, the directive line is
+// silently removed without reading or inlining the file content again. Pass
+// nil if no deduplication is needed.
+//
 // The function works in three passes:
 //  1. Collect all %include directives and their line numbers into the inclusions slice.
+//     Directives targeting paths in alreadyIncluded are collected separately for removal.
 //     Panics if a non-.kasm file is referenced.
-//  2. Detect duplicate %include directives and panic if any are found.
-//  3. Replace each %include directive with the content of the referenced file,
-//     wrapped in ; FILE: and ; END FILE: comments for traceability.
-func PreProcessingHandleIncludes(source string) (string, []PreProcessingInclusion) {
+//  2. Deduplicate %include directives within this invocation (FR-1.7). The first
+//     occurrence of each path is kept; subsequent duplicates are silently stripped.
+//  3. Replace each new %include directive with the content of the referenced file,
+//     wrapped in ; FILE: and ; END FILE: comments for traceability. Only the first
+//     match is replaced. After inlining, any remaining %include directives for
+//     shared or duplicate paths are stripped from the source.
+func PreProcessingHandleIncludes(source string, alreadyIncluded map[string]bool) (string, []PreProcessingInclusion) {
 	// Early-exit: if the source is empty, skip all processing (AR-8.1).
 	if len(source) == 0 {
 		return source, nil
@@ -37,6 +47,9 @@ func PreProcessingHandleIncludes(source string) (string, []PreProcessingInclusio
 
 	// Pre-allocate with known capacity to avoid repeated slice growth
 	inclusions := make([]PreProcessingInclusion, 0, len(matches))
+
+	// FR-1.7: Collect paths that should be silently stripped (shared dependencies).
+	var sharedPaths []string
 
 	// Pass 1: collect all %include directives before modifying the source,
 	// so that line numbers remain accurate.
@@ -58,27 +71,39 @@ func PreProcessingHandleIncludes(source string) (string, []PreProcessingInclusio
 			panic(message)
 		}
 
+		// FR-1.7.1 / FR-1.7.4: If the file has already been inlined by a
+		// previous invocation, record it for silent removal — do not add it
+		// to the inclusions list.
+		if alreadyIncluded != nil && alreadyIncluded[includedFilePath] {
+			sharedPaths = append(sharedPaths, includedFilePath)
+			continue
+		}
+
 		inclusions = append(inclusions, PreProcessingInclusion{
 			IncludedFilePath: includedFilePath,
 			LineNumber:       lineNumber,
 		})
 	}
 
-	// Pass 2: detect duplicate %include directives.
-	// A file may only be included once; duplicates are a pre-processing error.
-	seen := make(map[string]int, len(inclusions)) // maps file path to first line number
+	// Pass 2: deduplicate %include directives within this invocation.
+	// FR-1.7: A shared dependency may appear in multiple included files. The
+	// first occurrence is kept; subsequent duplicates are silently stripped.
+	seen := make(map[string]bool, len(inclusions))
+	deduplicated := make([]PreProcessingInclusion, 0, len(inclusions))
 	for _, inclusion := range inclusions {
-		if firstLine, exists := seen[inclusion.IncludedFilePath]; exists {
-			message := fmt.Sprintf("pre-processing error: Duplicate %%include for file '%s' at line %d (first included at line %d)",
-				inclusion.IncludedFilePath, inclusion.LineNumber, firstLine)
-			panic(message)
+		if seen[inclusion.IncludedFilePath] {
+			// FR-1.7.3: Duplicate within this invocation — will be stripped after inlining.
+			continue
 		}
-		seen[inclusion.IncludedFilePath] = inclusion.LineNumber
+		seen[inclusion.IncludedFilePath] = true
+		deduplicated = append(deduplicated, inclusion)
 	}
+	inclusions = deduplicated
 
 	// Pass 3: replace each %include directive with the file content,
 	// surrounded by ; FILE: / ; END FILE: comments.
-	// Compile the replacement pattern once per inclusion path.
+	// Uses ReplaceFirst (n=1) so that only the first occurrence is inlined;
+	// any duplicate occurrences of the same path remain as-is for now.
 	for _, inclusion := range inclusions {
 		includedContentBytes, err := os.ReadFile(inclusion.IncludedFilePath)
 		if err != nil {
@@ -96,7 +121,25 @@ func PreProcessingHandleIncludes(source string) (string, []PreProcessingInclusio
 
 		// Per-value regex: depends on the inclusion path, compiled once per path (AR-6.4).
 		includeDirectivePattern := regexp.MustCompile(`(?m)^\s*%include\s+"` + regexp.QuoteMeta(inclusion.IncludedFilePath) + `"\s*$`)
-		source = includeDirectivePattern.ReplaceAllString(source, includedContent)
+		// Replace only the first match so that duplicates are not inlined twice.
+		loc := includeDirectivePattern.FindStringIndex(source)
+		if loc != nil {
+			source = source[:loc[0]] + includedContent + source[loc[1]:]
+		}
+	}
+
+	// FR-1.7.1: Strip remaining %include directives for shared dependencies.
+	// This removes: (a) directives for paths already inlined in a previous
+	// invocation (from the alreadyIncluded set), and (b) duplicate directives
+	// within this invocation whose first occurrence was already inlined above.
+	for _, sharedPath := range sharedPaths {
+		pattern := regexp.MustCompile(`(?m)^\s*%include\s+"` + regexp.QuoteMeta(sharedPath) + `"\s*\n?`)
+		source = pattern.ReplaceAllString(source, "")
+	}
+	// Also strip any remaining duplicates that were deduplicated in Pass 2.
+	for path := range seen {
+		pattern := regexp.MustCompile(`(?m)^\s*%include\s+"` + regexp.QuoteMeta(path) + `"\s*\n?`)
+		source = pattern.ReplaceAllString(source, "")
 	}
 
 	return source, inclusions

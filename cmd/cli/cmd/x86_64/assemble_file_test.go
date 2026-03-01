@@ -255,3 +255,91 @@ func TestPreProcessIncludes_ErrorMessageFormat(t *testing.T) {
 		t.Errorf("error message must contain the file path, got: %s", msg)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// FR-1.7: Shared Dependency Deduplication
+// ---------------------------------------------------------------------------
+
+// TestPreProcessIncludes_SharedDependency verifies FR-1.7: when two files
+// include the same shared dependency, the shared file is inlined once and
+// the second %include is silently stripped. No error is produced.
+//
+// Graph:  root → a → shared
+//
+//	root → b → shared
+//
+// Expected: shared.kasm content appears exactly once in the final source.
+func TestPreProcessIncludes_SharedDependency(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	shared := filepath.Join(tmpDir, "shared.kasm")
+	os.WriteFile(shared, []byte("mov rax, 42"), 0644)
+
+	fileA := filepath.Join(tmpDir, "a.kasm")
+	os.WriteFile(fileA, []byte(`%include "`+shared+`"`+"\nmov rbx, 1"), 0644)
+
+	fileB := filepath.Join(tmpDir, "b.kasm")
+	os.WriteFile(fileB, []byte(`%include "`+shared+`"`+"\nmov rcx, 2"), 0644)
+
+	root := filepath.Join(tmpDir, "root.kasm")
+	os.WriteFile(root, []byte(`%include "`+fileA+`"`+"\n"+`%include "`+fileB+`"`), 0644)
+
+	source, _ := os.ReadFile(root)
+	debugCtx := debugcontext.NewDebugContext(root)
+	tracker, err := lineMap.Track(root)
+	if err != nil {
+		t.Fatalf("failed to create tracker: %v", err)
+	}
+
+	result := preProcessIncludes(string(source), root, tracker, debugCtx)
+
+	// FR-1.7.4: No errors — shared dependencies are valid.
+	if debugCtx.HasErrors() {
+		t.Fatalf("expected no errors for shared dependency, got: %v", debugCtx.Errors())
+	}
+
+	// FR-1.7.2: shared.kasm content should be inlined exactly once.
+	count := strings.Count(result, "mov rax, 42")
+	if count != 1 {
+		t.Errorf("expected shared content to appear exactly once, got %d occurrences:\n%s", count, result)
+	}
+
+	// Both a.kasm and b.kasm own content should be present.
+	if !strings.Contains(result, "mov rbx, 1") {
+		t.Error("expected a.kasm content in result")
+	}
+	if !strings.Contains(result, "mov rcx, 2") {
+		t.Error("expected b.kasm content in result")
+	}
+}
+
+// TestPreProcessIncludes_SharedDependency_NoErrorOnSecond verifies FR-1.7.4:
+// the second inclusion of a shared dependency does not produce an error.
+func TestPreProcessIncludes_SharedDependency_NoErrorOnSecond(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	shared := filepath.Join(tmpDir, "constants.kasm")
+	os.WriteFile(shared, []byte("BUFFER_SIZE equ 4096"), 0644)
+
+	fileA := filepath.Join(tmpDir, "io.kasm")
+	os.WriteFile(fileA, []byte(`%include "`+shared+`"`), 0644)
+
+	fileB := filepath.Join(tmpDir, "math.kasm")
+	os.WriteFile(fileB, []byte(`%include "`+shared+`"`), 0644)
+
+	root := filepath.Join(tmpDir, "main.kasm")
+	os.WriteFile(root, []byte(`%include "`+fileA+`"`+"\n"+`%include "`+fileB+`"`), 0644)
+
+	source, _ := os.ReadFile(root)
+	debugCtx := debugcontext.NewDebugContext(root)
+	tracker, err := lineMap.Track(root)
+	if err != nil {
+		t.Fatalf("failed to create tracker: %v", err)
+	}
+
+	_ = preProcessIncludes(string(source), root, tracker, debugCtx)
+
+	if debugCtx.HasErrors() {
+		t.Fatalf("shared dependency should not produce errors, got: %v", debugCtx.Errors())
+	}
+}

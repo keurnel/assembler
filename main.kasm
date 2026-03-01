@@ -2,21 +2,9 @@
 %include "shared-module.kasm"
 
 
-
-
-; %include "hulp.kasm"
-;
-;
-; %macro een_macro 2
-;    mov rax, %1
-;   mov rdi, %2
-;  mov rdx, 13
-;%endmacro
-;
-;een_macro rax, rsi
-;een_macro rax, rsi
-;een_macro rax, rsi
-;
-; Start routine van het programma
-;.start:
-
+%macro main_macro 2
+    mov rax, %1
+    mov rdi, %2
+    mov rsi, message
+    mov rdx, 13
+%endmacro

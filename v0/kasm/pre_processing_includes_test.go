@@ -19,7 +19,7 @@ func TestPreProcessingHandleIncludes_SingleInclude(t *testing.T) {
 	os.WriteFile(includePath, []byte("mov rax, 1\nmov rdi, 0"), 0644)
 
 	source := `%include "` + includePath + `"`
-	result, inclusions := kasm.PreProcessingHandleIncludes(source)
+	result, inclusions := kasm.PreProcessingHandleIncludes(source, nil)
 
 	if len(inclusions) != 1 {
 		t.Fatalf("expected 1 inclusion, got %d", len(inclusions))
@@ -55,7 +55,7 @@ func TestPreProcessingHandleIncludes_MultipleIncludes(t *testing.T) {
 
 	source := `%include "` + path1 + `"
 %include "` + path2 + `"`
-	result, inclusions := kasm.PreProcessingHandleIncludes(source)
+	result, inclusions := kasm.PreProcessingHandleIncludes(source, nil)
 
 	if len(inclusions) != 2 {
 		t.Fatalf("expected 2 inclusions, got %d", len(inclusions))
@@ -71,7 +71,7 @@ func TestPreProcessingHandleIncludes_MultipleIncludes(t *testing.T) {
 
 func TestPreProcessingHandleIncludes_NoIncludes(t *testing.T) {
 	source := `mov rax, 1`
-	result, inclusions := kasm.PreProcessingHandleIncludes(source)
+	result, inclusions := kasm.PreProcessingHandleIncludes(source, nil)
 
 	if len(inclusions) != 0 {
 		t.Fatalf("expected 0 inclusions, got %d", len(inclusions))
@@ -98,31 +98,36 @@ func TestPreProcessingHandleIncludes_NonKasmExtension_Panics(t *testing.T) {
 	}()
 
 	source := `%include "module.asm"`
-	kasm.PreProcessingHandleIncludes(source)
+	kasm.PreProcessingHandleIncludes(source, nil)
 }
 
-func TestPreProcessingHandleIncludes_DuplicateInclude_Panics(t *testing.T) {
+// TestPreProcessingHandleIncludes_DuplicateInclude_Deduplicated verifies
+// FR-1.7: duplicate %include directives within a single invocation are
+// silently deduplicated — the file is inlined once, the duplicate is stripped.
+func TestPreProcessingHandleIncludes_DuplicateInclude_Deduplicated(t *testing.T) {
 	tmpDir := t.TempDir()
 	includePath := filepath.Join(tmpDir, "hulp.kasm")
 	os.WriteFile(includePath, []byte("nop"), 0644)
 
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Fatal("expected panic for duplicate include")
-		}
-		msg, ok := r.(string)
-		if !ok {
-			t.Fatalf("expected string panic, got %T", r)
-		}
-		if !containsSubstring(msg, "Duplicate %include") {
-			t.Errorf("unexpected panic message: %s", msg)
-		}
-	}()
-
 	source := `%include "` + includePath + `"
 %include "` + includePath + `"`
-	kasm.PreProcessingHandleIncludes(source)
+	result, inclusions := kasm.PreProcessingHandleIncludes(source, nil)
+
+	// Only one inclusion should be recorded (the first occurrence).
+	if len(inclusions) != 1 {
+		t.Fatalf("expected 1 inclusion, got %d", len(inclusions))
+	}
+
+	// Content should appear exactly once.
+	count := strings.Count(result, "nop")
+	if count != 1 {
+		t.Errorf("expected 'nop' to appear once, got %d times:\n%s", count, result)
+	}
+
+	// No remaining %include directives.
+	if strings.Contains(result, "%include") {
+		t.Errorf("expected no remaining %%include directives, got:\n%s", result)
+	}
 }
 
 func TestPreProcessingHandleIncludes_FileNotFound_Panics(t *testing.T) {
@@ -141,7 +146,7 @@ func TestPreProcessingHandleIncludes_FileNotFound_Panics(t *testing.T) {
 	}()
 
 	source := `%include "nonexistent.kasm"`
-	kasm.PreProcessingHandleIncludes(source)
+	kasm.PreProcessingHandleIncludes(source, nil)
 }
 
 func TestPreProcessingHandleIncludes_LineNumber(t *testing.T) {
@@ -152,7 +157,7 @@ func TestPreProcessingHandleIncludes_LineNumber(t *testing.T) {
 	source := `; line 1
 ; line 2
 %include "` + includePath + `"`
-	_, inclusions := kasm.PreProcessingHandleIncludes(source)
+	_, inclusions := kasm.PreProcessingHandleIncludes(source, nil)
 
 	if len(inclusions) != 1 {
 		t.Fatalf("expected 1 inclusion, got %d", len(inclusions))
@@ -168,7 +173,7 @@ func TestPreProcessingHandleIncludes_TrimWhitespace(t *testing.T) {
 	os.WriteFile(includePath, []byte("\n  mov rax, 1\n\n"), 0644)
 
 	source := `%include "` + includePath + `"`
-	result, _ := kasm.PreProcessingHandleIncludes(source)
+	result, _ := kasm.PreProcessingHandleIncludes(source, nil)
 
 	// Should not start with newline inside FILE block (trimmed)
 	if !containsSubstring(result, "; FILE: "+includePath+"\nmov rax, 1\n; END FILE:") {
@@ -176,11 +181,105 @@ func TestPreProcessingHandleIncludes_TrimWhitespace(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// FR-1.7: Shared Dependency Deduplication
+// ---------------------------------------------------------------------------
+
+// TestPreProcessingHandleIncludes_SharedDependency_Skipped verifies FR-1.7.1:
+// when a %include path is in the alreadyIncluded set, the directive is silently
+// removed and the file is not inlined again.
+func TestPreProcessingHandleIncludes_SharedDependency_Skipped(t *testing.T) {
+	tmpDir := t.TempDir()
+	sharedPath := filepath.Join(tmpDir, "shared.kasm")
+	os.WriteFile(sharedPath, []byte("mov rax, 42"), 0644)
+
+	source := `%include "` + sharedPath + `"` + "\nmov rbx, 1"
+	alreadyIncluded := map[string]bool{sharedPath: true}
+
+	result, inclusions := kasm.PreProcessingHandleIncludes(source, alreadyIncluded)
+
+	// FR-1.7.1: The directive should be stripped.
+	if strings.Contains(result, "%include") {
+		t.Errorf("expected %%include directive to be stripped, got:\n%s", result)
+	}
+
+	// FR-1.7.3: The file content should NOT be inlined a second time.
+	if strings.Contains(result, "mov rax, 42") {
+		t.Errorf("expected shared dependency content to NOT be inlined, got:\n%s", result)
+	}
+
+	// FR-1.7.4: Should not be an error — no panic, no inclusion entry.
+	if len(inclusions) != 0 {
+		t.Errorf("expected 0 inclusions for shared dependency, got %d", len(inclusions))
+	}
+
+	// Original content should be preserved.
+	if !strings.Contains(result, "mov rbx, 1") {
+		t.Error("expected original content to be preserved")
+	}
+}
+
+// TestPreProcessingHandleIncludes_SharedDependency_MixedWithNew verifies
+// FR-1.7.2: new includes are inlined normally while shared dependencies are
+// silently skipped.
+func TestPreProcessingHandleIncludes_SharedDependency_MixedWithNew(t *testing.T) {
+	tmpDir := t.TempDir()
+	sharedPath := filepath.Join(tmpDir, "shared.kasm")
+	newPath := filepath.Join(tmpDir, "new.kasm")
+	os.WriteFile(sharedPath, []byte("mov rax, 42"), 0644)
+	os.WriteFile(newPath, []byte("mov rcx, 99"), 0644)
+
+	source := `%include "` + sharedPath + `"` + "\n" + `%include "` + newPath + `"`
+	alreadyIncluded := map[string]bool{sharedPath: true}
+
+	result, inclusions := kasm.PreProcessingHandleIncludes(source, alreadyIncluded)
+
+	// FR-1.7.2: The new file should be inlined normally.
+	if len(inclusions) != 1 {
+		t.Fatalf("expected 1 inclusion (new file only), got %d", len(inclusions))
+	}
+	if inclusions[0].IncludedFilePath != newPath {
+		t.Errorf("expected inclusion path '%s', got '%s'", newPath, inclusions[0].IncludedFilePath)
+	}
+
+	// New file content should be inlined.
+	if !strings.Contains(result, "mov rcx, 99") {
+		t.Error("expected new file content in result")
+	}
+	if !strings.Contains(result, "; FILE: "+newPath) {
+		t.Error("expected ; FILE: comment for new include")
+	}
+
+	// Shared file content should NOT be inlined.
+	if strings.Contains(result, "mov rax, 42") {
+		t.Error("shared dependency content should not be inlined")
+	}
+}
+
+// TestPreProcessingHandleIncludes_SharedDependency_NilSet verifies that
+// passing nil for alreadyIncluded works identically to the previous behaviour
+// (no deduplication).
+func TestPreProcessingHandleIncludes_SharedDependency_NilSet(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "helper.kasm")
+	os.WriteFile(path, []byte("nop"), 0644)
+
+	source := `%include "` + path + `"`
+	result, inclusions := kasm.PreProcessingHandleIncludes(source, nil)
+
+	if len(inclusions) != 1 {
+		t.Fatalf("expected 1 inclusion, got %d", len(inclusions))
+	}
+	if !strings.Contains(result, "nop") {
+		t.Error("expected included content in result")
+	}
+}
+
 func BenchmarkPreProcessingHandleIncludes_NoIncludes(b *testing.B) {
 	source := "mov rax, 1\nmov rdi, 0\nsyscall\n"
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingHandleIncludes(source)
+		kasm.PreProcessingHandleIncludes(source, nil)
 	}
 }
 
@@ -192,7 +291,7 @@ func BenchmarkPreProcessingHandleIncludes_SingleInclude(b *testing.B) {
 	source := `%include "` + path + `"`
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingHandleIncludes(source)
+		kasm.PreProcessingHandleIncludes(source, nil)
 	}
 }
 
@@ -207,7 +306,7 @@ func BenchmarkPreProcessingHandleIncludes_MultipleIncludes(b *testing.B) {
 	source := sb.String()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingHandleIncludes(source)
+		kasm.PreProcessingHandleIncludes(source, nil)
 	}
 }
 
@@ -224,7 +323,7 @@ func BenchmarkPreProcessingHandleIncludes_LargeIncludedFile(b *testing.B) {
 	source := `%include "` + path + `"`
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingHandleIncludes(source)
+		kasm.PreProcessingHandleIncludes(source, nil)
 	}
 }
 
@@ -239,7 +338,7 @@ func BenchmarkPreProcessingHandleIncludes_ManyIncludes(b *testing.B) {
 	source := sb.String()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingHandleIncludes(source)
+		kasm.PreProcessingHandleIncludes(source, nil)
 	}
 }
 
@@ -256,6 +355,6 @@ func BenchmarkPreProcessingHandleIncludes_IncludeDeepInSource(b *testing.B) {
 	source := sb.String()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kasm.PreProcessingHandleIncludes(source)
+		kasm.PreProcessingHandleIncludes(source, nil)
 	}
 }

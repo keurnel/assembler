@@ -1,4 +1,4 @@
-%macro module_macro2 2
+%macro module_macro12 2
     mov rax, %1
     mov rdi, %2
     mov rsi, message

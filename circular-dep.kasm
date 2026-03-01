@@ -1,4 +1,3 @@
-%include "main.kasm"
 %include "shared-module.kasm"
 
 %macro hulp_functie 2

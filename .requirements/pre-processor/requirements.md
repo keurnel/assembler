@@ -275,9 +275,10 @@ traceability.
 - **FR-1.2.1** Only `.kasm` files may be included. If the path does not end with
   `.kasm`, the function must panic with a message containing the file path and
   line number.
-- **FR-1.2.2** A file may only be included once. If the same path appears in
-  multiple `%include` directives, the function must panic with a message
-  containing both line numbers.
+- **FR-1.2.2** If the same path appears in multiple `%include` directives
+  within a single invocation, the first occurrence is inlined and subsequent
+  duplicates are silently stripped (see FR-1.7: Shared Dependency
+  Deduplication).
 - **FR-1.2.3** If `os.ReadFile` fails for an included file, the function must
   panic with a message containing the file path, line number, and the underlying
   error.
@@ -336,7 +337,8 @@ validating, and inlining the dependency graph into the top-level source.
       See [dependency-graph.md FR-5.2](dependency-graph.md#fr-5-recursive-resolution).
     - **FR-1.5.1.3** Shared dependencies (files included by multiple parents)
       result in a single node in the graph — the source is included once and
-      shared with all parents that reference it.
+      shared with all parents that reference it. At runtime, the orchestrator
+      ensures the file content is inlined only once (see FR-1.7).
       See [dependency-graph.md FR-3.2, FR-5.3](dependency-graph.md#fr-3-node-management).
 - **FR-1.5.2** The orchestrator checks `graph.Acyclic()` immediately after
   construction. If the graph is cyclic, the orchestrator records a
@@ -344,9 +346,9 @@ validating, and inlining the dependency graph into the top-level source.
   itself does not panic on cycles — it returns a boolean.
   See [dependency-graph.md FR-8](dependency-graph.md#fr-8-acyclicity-checking)
   and FR-1.6 below.
-- **FR-1.5.3** `PreProcessingHandleIncludes` detects duplicate `%include`
-  directives within a single invocation (FR-1.2.2). Cross-invocation cycle
-  detection is an orchestrator concern (FR-1.6).
+- **FR-1.5.3** `PreProcessingHandleIncludes` silently deduplicates duplicate
+  `%include` directives within a single invocation (FR-1.2.2 / FR-1.7).
+  Cross-invocation cycle detection is an orchestrator concern (FR-1.6).
 
 ### FR-1.6: Circular Include Detection
 
@@ -363,9 +365,9 @@ at two levels:
    invocations.
 
 - **FR-1.6.1** Within a single invocation of `PreProcessingHandleIncludes`, a
-  file path may appear in at most one `%include` directive. If the same path
-  appears more than once, the function must panic (FR-1.2.2). This catches
-  trivial self-inclusion and duplicate directives within the same source.
+  file path may appear in multiple `%include` directives. The first occurrence
+  is inlined; subsequent duplicates are silently stripped (FR-1.2.2 / FR-1.7).
+  This handles shared dependencies that appear in multiple included files.
 - **FR-1.6.2** Cross-invocation circular inclusion detection is the
   responsibility of the orchestrator. The orchestrator must maintain a set of
   all file paths that have been included across recursive invocations of
@@ -387,6 +389,39 @@ at two levels:
   indirectly through a chain that leads back to the root.
 - **FR-1.6.7** The error message must use the phrase "circular inclusion" and
   include the file path, enabling grep-based log analysis.
+
+### FR-1.7: Shared Dependency Deduplication
+
+A shared dependency is a file that is included by more than one parent file in
+the dependency graph (e.g. both `a.kasm` and `b.kasm` include
+`constants.kasm`). When the orchestrator recursively resolves includes, the
+content of a shared dependency must be inlined **exactly once** — at the point
+where it is first encountered during resolution. All subsequent `%include`
+directives that reference the same file must be silently removed without
+inlining the content again.
+
+- **FR-1.7.1** The orchestrator must track which file paths have already been
+  inlined (the same seen-set used for circular include detection, FR-1.6.2).
+  When a `%include` directive resolves to a path that is already in the
+  seen-set, the directive line must be removed from the source (replaced with
+  an empty string or a comment) without reading or inlining the file content
+  a second time.
+- **FR-1.7.2** The first inclusion of a shared dependency is inlined normally
+  (FR-1.3.1), complete with `; FILE:` / `; END FILE:` boundary comments. The
+  `PreProcessingInclusion` entry for the first occurrence is recorded as
+  usual (FR-1.4.1).
+- **FR-1.7.3** Subsequent inclusions of the same file must **not** produce a
+  second copy of the file content in the source. Duplicating content would
+  cause duplicate label definitions, duplicate macro definitions, and other
+  semantic errors in later pipeline stages.
+- **FR-1.7.4** Subsequent inclusions must **not** be treated as errors. Unlike
+  circular inclusion (FR-1.6.4), a shared dependency is a valid and expected
+  pattern — it simply means two files depend on the same utility file.
+- **FR-1.7.5** The dependency graph already models shared dependencies as a
+  single node with multiple incoming edges
+  ([dependency-graph.md FR-3.2, FR-5.3](dependency-graph.md#fr-3-node-management)).
+  The deduplication described here is the runtime counterpart that ensures the
+  inlined source matches the graph's single-node semantics.
 
 ---
 
