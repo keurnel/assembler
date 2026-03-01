@@ -286,6 +286,34 @@ func preProcessIncludes(source string, rootFilePath string, tracker *lineMap.Tra
 	seen := map[string]bool{rootFilePath: true}
 	totalInclusions := 0
 
+	// FR-1.7.6 / FR-1.7.7: Identify shared dependencies from the dependency
+	// graph and hoist them into a shared-inclusions block at the top of the
+	// source. Shared dependencies are files included by more than one parent.
+	sharedDeps := dependencyGraph.SharedDependencies()
+	var sharedBlock strings.Builder
+	sharedBlock.WriteString("; =======================================\n")
+	sharedBlock.WriteString("; Begin shared inclusions\n")
+	sharedBlock.WriteString("; =======================================\n\n")
+	for _, sharedPath := range sharedDeps {
+		content := strings.TrimSpace(dependencyGraph.NodeSource(sharedPath))
+		sharedBlock.WriteString(fmt.Sprintf("; FILE: %s\n%s\n; END FILE: %s\n",
+			sharedPath, content, sharedPath))
+		// Pre-seed the seen set so that all %include directives referencing
+		// this shared file are silently stripped during normal resolution.
+		// Add both the absolute path and the cwd-relative path so that
+		// directives using either form are matched.
+		seen[sharedPath] = true
+		if rel, err := filepath.Rel(cwd, sharedPath); err == nil {
+			seen[rel] = true
+		}
+		totalInclusions++
+	}
+	sharedBlock.WriteString("\n; =======================================\n")
+	sharedBlock.WriteString("; End shared inclusions\n")
+	sharedBlock.WriteString("; =======================================\n\n\n")
+
+	source = sharedBlock.String() + source
+
 	// FR-1.5: Recursively resolve includes. Each iteration inlines one level
 	// of %include directives. The loop continues until no new inclusions are
 	// found (the source is fully resolved) or a circular inclusion is detected.

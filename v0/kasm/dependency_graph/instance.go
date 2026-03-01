@@ -178,6 +178,39 @@ func (i *Instance) scanSource(source string, parentNode *DependencyGraphNode) {
 	}
 }
 
+// SharedDependencies returns the sorted file paths of nodes that have more
+// than one incoming edge — i.e. files that are included by multiple parents.
+// The root file is excluded even if it has incoming edges.
+func (i *Instance) SharedDependencies() []string {
+	// Count incoming edges per node.
+	incomingCount := make(map[string]int, len(i.nodes))
+	for _, node := range i.nodes {
+		for _, edge := range node.edges {
+			incomingCount[edge.to.name]++
+		}
+	}
+
+	var shared []string
+	for name, count := range incomingCount {
+		if count > 1 && name != i.rootFilePath {
+			shared = append(shared, name)
+		}
+	}
+
+	sort.Strings(shared)
+	return shared
+}
+
+// NodeSource returns the source content of the node with the given name.
+// Returns an empty string if the node does not exist.
+func (i *Instance) NodeSource(name string) string {
+	node, exists := i.nodes[name]
+	if !exists {
+		return ""
+	}
+	return node.source
+}
+
 // Acyclic - checks if the graph is acyclic.
 func (i *Instance) Acyclic() bool {
 	visited := make(map[string]bool, len(i.nodes))

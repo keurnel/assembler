@@ -440,6 +440,27 @@ inlining the content again.
   ([dependency-graph.md FR-3.2, FR-5.3](dependency-graph.md#fr-3-node-management)).
   The deduplication described here is the runtime counterpart that ensures the
   inlined source matches the graph's single-node semantics.
+- **FR-1.7.6** Shared dependencies must be **hoisted** to the top of the
+  resulting source, before any non-shared included content and before the
+  root file's own source lines. This ensures that shared definitions (labels,
+  macros, constants) are available to all files that depend on them.
+- **FR-1.7.7** The hoisted shared dependencies must be wrapped in boundary
+  comments that clearly delimit the shared-inclusion region:
+  ```
+  ; =======================================
+  ; Begin shared inclusions
+  ; =======================================
+  
+  <shared dependency content — one ; FILE: / ; END FILE: block per shared file>
+  
+  ; =======================================
+  ; End shared inclusions
+  ; =======================================
+  
+  ```
+  The boundary comments are always emitted — even when there are no shared
+  dependencies, the block is present but empty. This provides a stable
+  anchor for tooling and debugging.
 
 ---
 
