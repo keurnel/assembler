@@ -304,46 +304,63 @@ traceability.
 - **FR-1.4.2** If there are no `%include` directives, the source is returned
   unchanged and the slice is empty.
 
-### FR-1.5: Recursive Includes
+### FR-1.5: Recursive Includes & Dependency Graph
 
-#### FR-1.5.1: Dependency Graph
-The first thing the pre-processor does is creating a dependency graph of all included files by recursively resolving `%include`
-directives. A valid non-circular graph is required in order to produce the final source string with all content properly inlined.
+Before any file content is inlined, the orchestrator constructs a dependency
+graph that captures all `%include` relationships across the entire file tree.
+The graph is validated (acyclicity, file existence) before
+`PreProcessingHandleIncludes` is called. The full specification of the
+dependency graph — its data model, construction, node/edge management,
+recursive resolution, acyclicity checking, error handling, and testability —
+lives in the [Dependency Graph](dependency-graph.md) document.
 
-More information about the dependency graph can be found in the [Dependency Graph](dependency-graph.md) document.
+Every file that is being included using `%include` is called a **dependency**.
+If a dependency contains its own `%include` directives, those are called
+**nested dependencies**. The pre-processor is in charge of resolving,
+validating, and inlining the dependency graph into the top-level source.
 
-#### FR-1.5.2: 
-
-Every file that is being included using `%include` is called a dependency. If a dependency
-contains its own `%include` directives, those are called nested dependencies. The pre-processor
-is in charge of resolving, validating and implementing the dependency graph into the
-top-level source.
-
-- **FR-1.5.1** The pre-processor generates a dependency graph by recursively resolving
-  `%include` directives in included files. When a file is included, the pre-processor must
-  scan its content for additional `%include` directives and resolve those as well, building
-  a complete graph of all dependencies.
-    - **FR-1.5.1.1** The dependency graph is a directed acyclic graph (DAG) where nodes are files and edges
-      represent `%include` relationships. The root node is the top-level source file, and leaf
+- **FR-1.5.1** The orchestrator creates the dependency graph via
+  `dependency_graph.New(source, cwd)` before calling
+  `PreProcessingHandleIncludes`. The graph recursively scans the source and
+  all included files for `%include` directives, building a complete directed
+  acyclic graph (DAG) of all dependencies. See
+  [dependency-graph.md FR-1](dependency-graph.md#fr-1-graph-construction) and
+  [FR-5](dependency-graph.md#fr-5-recursive-resolution).
+    - **FR-1.5.1.1** Nodes in the graph are files; edges are `%include`
+      relationships. The root node is the top-level source file and leaf
       nodes are files that do not include any others.
-    - **FR-1.5.1.2** The dependency graph must be built in a depth-first manner, so that nested dependencies are
-      resolved
-      before their parents. This ensures that the final source string is constructed in the correct
-      order, with all nested content properly inlined.
-    - **FR-1.5.1.3** shared dependencies (files included by multiple parents) result in a single node in the
-      graph, the source is included once and shared with all parents that reference it.
-- **FR-1.5.2** The pre-processor crashes on circular dependencies.
-
-
-- **FR-1.5.3** The function itself detects duplicate `%include` directives
-  within a single invocation (FR-1.2.2), but cross-invocation cycle detection
-  is an orchestrator concern.
+      See [dependency-graph.md FR-3](dependency-graph.md#fr-3-node-management).
+    - **FR-1.5.1.2** The graph is built depth-first so that nested
+      dependencies are resolved before their parents, ensuring the final
+      source string is constructed in the correct order.
+      See [dependency-graph.md FR-5.2](dependency-graph.md#fr-5-recursive-resolution).
+    - **FR-1.5.1.3** Shared dependencies (files included by multiple parents)
+      result in a single node in the graph — the source is included once and
+      shared with all parents that reference it.
+      See [dependency-graph.md FR-3.2, FR-5.3](dependency-graph.md#fr-3-node-management).
+- **FR-1.5.2** The orchestrator checks `graph.Acyclic()` immediately after
+  construction. If the graph is cyclic, the orchestrator records a
+  `debugcontext.Error` and aborts include processing. The dependency graph
+  itself does not panic on cycles — it returns a boolean.
+  See [dependency-graph.md FR-8](dependency-graph.md#fr-8-acyclicity-checking)
+  and FR-1.6 below.
+- **FR-1.5.3** `PreProcessingHandleIncludes` detects duplicate `%include`
+  directives within a single invocation (FR-1.2.2). Cross-invocation cycle
+  detection is an orchestrator concern (FR-1.6).
 
 ### FR-1.6: Circular Include Detection
 
 Circular inclusion occurs when a chain of `%include` directives forms a cycle
-(e.g. `a.kasm` includes `b.kasm`, which includes `a.kasm`). Detection is split
-between the pre-processor function and the orchestrator.
+(e.g. `a.kasm` includes `b.kasm`, which includes `a.kasm`). Detection happens
+at two levels:
+
+1. **Structural (dependency graph):** The dependency graph package detects
+   cycles in the full file tree via `Acyclic()`. See
+   [dependency-graph.md FR-8](dependency-graph.md#fr-8-acyclicity-checking).
+2. **Runtime (orchestrator seen-set):** The orchestrator maintains a set of
+   previously included file paths across recursive invocations of
+   `PreProcessingHandleIncludes` to catch cycles that span multiple
+   invocations.
 
 - **FR-1.6.1** Within a single invocation of `PreProcessingHandleIncludes`, a
   file path may appear in at most one `%include` directive. If the same path
