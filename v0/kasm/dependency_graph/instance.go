@@ -280,30 +280,40 @@ func (i *Instance) String() string {
 		return "(empty graph)"
 	}
 
-	// Find root nodes: nodes that are not the target of any edge.
-	targets := make(map[string]bool, len(i.nodes))
-	for _, node := range i.nodes {
-		for _, edge := range node.edges {
-			targets[edge.to.name] = true
+	// When rootFilePath is set, use it as the sole tree root so the graph
+	// always starts from the root file.
+	var roots []string
+	if i.rootFilePath != "" {
+		if _, ok := i.nodes[i.rootFilePath]; ok {
+			roots = []string{i.rootFilePath}
 		}
 	}
 
-	roots := make([]string, 0)
-	for name := range i.nodes {
-		if !targets[name] {
-			roots = append(roots, name)
-		}
-	}
-
-	// If all nodes are targets (e.g. a pure cycle with no root), list all.
+	// Fall back to inferring roots: nodes that are not the target of any edge.
 	if len(roots) == 0 {
-		for name := range i.nodes {
-			roots = append(roots, name)
+		targets := make(map[string]bool, len(i.nodes))
+		for _, node := range i.nodes {
+			for _, edge := range node.edges {
+				targets[edge.to.name] = true
+			}
 		}
-	}
 
-	// FR-11.5.2: Sort roots for deterministic output across calls.
-	sort.Strings(roots)
+		for name := range i.nodes {
+			if !targets[name] {
+				roots = append(roots, name)
+			}
+		}
+
+		// If all nodes are targets (e.g. a pure cycle with no root), list all.
+		if len(roots) == 0 {
+			for name := range i.nodes {
+				roots = append(roots, name)
+			}
+		}
+
+		// FR-11.5.2: Sort roots for deterministic output across calls.
+		sort.Strings(roots)
+	}
 
 	var sb strings.Builder
 	expanded := make(map[string]bool, len(i.nodes))
