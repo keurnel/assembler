@@ -314,6 +314,16 @@ func preProcessIncludes(source string, rootFilePath string, tracker *lineMap.Tra
 
 	source = sharedBlock.String() + source
 
+	// Standard Library block: placeholder for future standard library content.
+	stdLibBlock := "; =======================================\n" +
+		"; Start Standard Library\n" +
+		"; =======================================\n" +
+		"; =======================================\n" +
+		"; End Standard Library\n" +
+		"; =======================================\n"
+
+	source = stdLibBlock + source
+
 	// FR-1.5: Recursively resolve includes. Each iteration inlines one level
 	// of %include directives. The loop continues until no new inclusions are
 	// found (the source is fully resolved) or a circular inclusion is detected.
