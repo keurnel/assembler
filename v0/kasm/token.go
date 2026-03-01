@@ -1,8 +1,9 @@
 package kasm
 
-type Token struct {
-	Type    TokenType // The type of the token (e.g., identifier, instruction, register).
-	Literal string    // The literal value of the token (e.g., the actual text from the source code).
-	Line    int       // The line number where the token was found (for error reporting).
-	Column  int       // The column number where the token starts (for error reporting).
-}
+import "github.com/keurnel/assembler/v0/kasm/ast"
+
+// Token is an alias for ast.Token, re-exported for backward compatibility.
+type Token = ast.Token
+
+// TokenType is an alias for ast.TokenType, re-exported for backward compatibility.
+type TokenType = ast.TokenType
