@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/keurnel/assembler/internal/debugcontext"
 	"github.com/keurnel/assembler/internal/lineMap"
@@ -56,7 +57,7 @@ func runAssembleFile(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to initialise line tracker: %w", err)
 	}
 
-	source = preProcess(source, tracker, debugCtx)
+	source = preProcess(source, fullPath, tracker, debugCtx)
 
 	// Print debug context entries when verbose mode is enabled.
 	if verbose {
@@ -214,8 +215,8 @@ func buildInstructionTable() map[string]architecture.Instruction {
 // preProcess runs the three pre-processing phases (includes, macros,
 // conditionals) and snapshots each transformation in the tracker.
 // Each phase sets its debug context phase and records errors instead of panicking.
-func preProcess(source string, tracker *lineMap.Tracker, debugCtx *debugcontext.DebugContext) string {
-	source = preProcessIncludes(source, tracker, debugCtx)
+func preProcess(source string, rootFilePath string, tracker *lineMap.Tracker, debugCtx *debugcontext.DebugContext) string {
+	source = preProcessIncludes(source, rootFilePath, tracker, debugCtx)
 	if debugCtx.HasErrors() {
 		return source
 	}
@@ -231,7 +232,11 @@ func preProcess(source string, tracker *lineMap.Tracker, debugCtx *debugcontext.
 
 // preProcessIncludes handles %include directives, detects circular inclusions,
 // and snapshots the result with source file annotations.
-func preProcessIncludes(source string, tracker *lineMap.Tracker, debugCtx *debugcontext.DebugContext) string {
+//
+// The rootFilePath is added to the seen set before the first invocation of
+// PreProcessingHandleIncludes so that a file cannot include itself indirectly
+// through a chain that leads back to the root (FR-1.6.6).
+func preProcessIncludes(source string, rootFilePath string, tracker *lineMap.Tracker, debugCtx *debugcontext.DebugContext) string {
 	debugCtx.SetPhase("pre-processing/includes")
 
 	cwd, err := os.Getwd()
@@ -242,34 +247,69 @@ func preProcessIncludes(source string, tracker *lineMap.Tracker, debugCtx *debug
 
 	dependencyGraph := dependency_graph.New(source, cwd)
 
+	// FR-11.4.1: Log the text representation of the dependency graph via
+	// debugCtx.Trace so it appears in verbose mode output.
+	debugCtx.Trace(debugCtx.Loc(0, 0), fmt.Sprintf("dependency graph:\n%s", dependencyGraph.String()))
+
 	if !dependencyGraph.Acyclic() {
-		debugCtx.Error(debugCtx.Loc(0, 0), "circular inclusion detected in dependency graph")
+		// FR-11.3.3: Use CyclePath() to enrich the error message with the
+		// full chain of files involved in the cycle.
+		cyclePath := dependencyGraph.CyclePath()
+		if cyclePath != nil {
+			debugCtx.Error(debugCtx.Loc(0, 0),
+				fmt.Sprintf("circular inclusion detected in dependency graph: %s",
+					strings.Join(cyclePath, " → ")))
+		} else {
+			debugCtx.Error(debugCtx.Loc(0, 0), "circular inclusion detected in dependency graph")
+		}
 		return source
 	}
 
-	println(dependencyGraph.Acyclic())
+	// FR-1.6.6: Seed the seen set with the root file path so that any
+	// included file that re-includes the root is caught.
+	seen := map[string]bool{rootFilePath: true}
+	totalInclusions := 0
 
-	source, inclusions := kasm.PreProcessingHandleIncludes(source)
+	// FR-1.5: Recursively resolve includes. Each iteration inlines one level
+	// of %include directives. The loop continues until no new inclusions are
+	// found (the source is fully resolved) or a circular inclusion is detected.
+	for {
+		var inclusions []kasm.PreProcessingInclusion
+		source, inclusions = kasm.PreProcessingHandleIncludes(source)
 
-	seen := make(map[string]bool, len(inclusions))
-	trackerInclusions := make([]lineMap.Inclusion, 0, len(inclusions))
-	for _, inc := range inclusions {
-		if seen[inc.IncludedFilePath] {
-			debugCtx.Error(
-				debugCtx.Loc(inc.LineNumber, 0),
-				fmt.Sprintf("circular inclusion of '%s'", inc.IncludedFilePath),
-			)
-			return source
+		if len(inclusions) == 0 {
+			break
 		}
-		seen[inc.IncludedFilePath] = true
-		trackerInclusions = append(trackerInclusions, lineMap.Inclusion{
-			FilePath:   inc.IncludedFilePath,
-			LineNumber: inc.LineNumber,
-		})
+
+		trackerInclusions := make([]lineMap.Inclusion, 0, len(inclusions))
+
+		// FR-1.6.3: Check each included file path against the seen set.
+		for _, inc := range inclusions {
+			if seen[inc.IncludedFilePath] {
+				// FR-1.6.4 / FR-1.6.7: Report circular inclusion error and abort.
+				debugCtx.Error(
+					debugCtx.Loc(inc.LineNumber, 0),
+					fmt.Sprintf("circular inclusion of '%s'", inc.IncludedFilePath),
+				)
+				return source
+			}
+		}
+
+		// FR-1.6.5: No circular inclusion detected — add all newly included
+		// file paths to the seen set before the next recursive invocation.
+		for _, inc := range inclusions {
+			seen[inc.IncludedFilePath] = true
+			trackerInclusions = append(trackerInclusions, lineMap.Inclusion{
+				FilePath:   inc.IncludedFilePath,
+				LineNumber: inc.LineNumber,
+			})
+		}
+
+		tracker.SnapshotWithInclusions(source, trackerInclusions)
+		totalInclusions += len(inclusions)
 	}
 
-	tracker.SnapshotWithInclusions(source, trackerInclusions)
-	debugCtx.Trace(debugCtx.Loc(0, 0), fmt.Sprintf("included %d file(s)", len(inclusions)))
+	debugCtx.Trace(debugCtx.Loc(0, 0), fmt.Sprintf("included %d file(s)", totalInclusions))
 	return source
 }
 

@@ -9,6 +9,9 @@ import (
 // Pre-compiled regex for conditional directives: %ifdef, %ifndef, %else, %endif (AR-6.1).
 var conditionalDirectiveRegex = regexp.MustCompile(`(?m)^\s*%(ifdef|ifndef|else|endif)\s*(\w*)\s*$`)
 
+// Pre-compiled regex for %define directives used for stripping (FR-3.4, AR-6.3).
+var defineStripRegex = regexp.MustCompile(`(?m)^\s*%define\s+\w+\s*\n?`)
+
 // PreProcessingHandleConditionals evaluates conditional assembly blocks
 // (%ifdef, %ifndef, %else, %endif) and produces a source string with only
 // the active branches retained. Directive lines are removed from the output.
@@ -24,10 +27,14 @@ func PreProcessingHandleConditionals(source string, definedSymbols map[string]bo
 	// Quick check to skip regex processing if there
 	// are no conditional directives in the source code.
 	//
-	if !strings.Contains(source, "%ifdef") &&
-		!strings.Contains(source, "%ifndef") &&
-		!strings.Contains(source, "%endif") {
-		return source
+	hasConditionals := strings.Contains(source, "%ifdef") ||
+		strings.Contains(source, "%ifndef") ||
+		strings.Contains(source, "%endif")
+
+	if !hasConditionals {
+		// FR-3.4: Even without conditionals, strip %define lines so they
+		// do not leak into the lexer.
+		return stripDefineDirectives(source)
 	}
 
 	directiveRegex := conditionalDirectiveRegex
@@ -157,7 +164,19 @@ func PreProcessingHandleConditionals(source string, definedSymbols map[string]bo
 		sb.WriteString(source[cursor:])
 	}
 
-	return sb.String()
+	// FR-3.4: Strip %define directives from the output so they do not leak
+	// into the lexer.
+	return stripDefineDirectives(sb.String())
+}
+
+// stripDefineDirectives removes all %define directive lines from the source
+// so that they do not leak into the lexer (FR-3.4). Uses the early-exit
+// pattern (AR-8.2, AR-8.3) to skip processing when no %define exists.
+func stripDefineDirectives(source string) string {
+	if !strings.Contains(source, "%define") {
+		return source
+	}
+	return defineStripRegex.ReplaceAllString(source, "")
 }
 
 // trimSpaceBounds returns the start and end indices within source[start:end]

@@ -3,11 +3,14 @@ package dependency_graph
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 )
 
 var (
-	OsStat = os.Stat
+	OsStat     = os.Stat
+	OsReadFile = os.ReadFile
 )
 
 type InstanceMetaData struct {
@@ -82,41 +85,83 @@ func (i *Instance) AddNode(node *DependencyGraphNode) {
 	i.nodes[node.name] = node
 }
 
-// build - builds the dependency graph from the source code.
+// build - builds the dependency graph from the source code by scanning for
+// %include directives and recursively resolving nested dependencies (FR-4, FR-5).
 func (i *Instance) build() {
+	i.scanSource(i.source, nil)
+}
 
-	type IncludeDirective struct {
-		relativePath string
-	}
+// scanSource recursively scans the given source for %include directives,
+// creates nodes and edges, and recurses into included files. The parentNode
+// is nil for the top-level source (FR-1.4: the root source is not added as
+// a named node; only included files become nodes).
+func (i *Instance) scanSource(source string, parentNode *DependencyGraphNode) {
+	lines := strings.Split(source, "\n")
 
-	// Split lines
-	//
-	lines := strings.Split(i.source, "\n")
-
-	// Are the first lines include directives?
-	//
 	for _, line := range lines {
-
 		line = strings.TrimSpace(line)
 
-		// Skip non-include lines.
-		//
+		// FR-4.3: Skip non-include lines.
 		if !strings.HasPrefix(line, "%include") {
 			continue
 		}
 
 		parts := strings.Fields(line)
+
+		// FR-4.4: Skip malformed directives without a path.
 		if len(parts) < 2 {
-			// Invalid include directive, skip.
 			continue
 		}
 
-		directive := parts[0]
-		if directive != "%include" {
+		if parts[0] != "%include" {
 			continue
+		}
+
+		// FR-4.5: Strip surrounding double quotes from the file path.
+		rawPath := parts[1]
+		if len(rawPath) >= 2 && rawPath[0] == '"' && rawPath[len(rawPath)-1] == '"' {
+			rawPath = rawPath[1 : len(rawPath)-1]
+		}
+
+		// FR-5.4: Only .kasm files may appear as include targets.
+		if !strings.HasSuffix(rawPath, ".kasm") {
+			panic(fmt.Sprintf("dependency graph error: included file '%s' is not a .kasm file", rawPath))
+		}
+
+		// FR-6.1: Resolve the file path relative to the graph's cwd.
+		resolvedPath := rawPath
+		if !filepath.IsAbs(rawPath) {
+			resolvedPath = filepath.Join(i.cwd, rawPath)
+		}
+
+		// FR-3.2: Check if a node for this path already exists (shared dependency).
+		existingNode, alreadyExists := i.nodes[resolvedPath]
+
+		if !alreadyExists {
+			// FR-6.2: Read file content.
+			contentBytes, err := OsReadFile(resolvedPath)
+			if err != nil {
+				panic(fmt.Sprintf("dependency graph error: failed to read file '%s': %v", resolvedPath, err))
+			}
+
+			// FR-6.3 / FR-3.4: Create a new node with the file content.
+			existingNode = DependencyGraphNodeNew(resolvedPath, string(contentBytes))
+			i.AddNode(existingNode)
+		}
+
+		// FR-4.6.4 / FR-7: Create a directed edge from parent to included file.
+		if parentNode != nil {
+			edge := DependencyGraphEdgeNew("include", parentNode, existingNode)
+			parentNode.AddEdge(edge)
+		}
+
+		// FR-5.1/FR-5.2: Recursively scan the included file's content for
+		// its own %include directives (depth-first). Skip if the node was
+		// already processed (shared dependency — FR-5.3).
+		if !alreadyExists {
+			i.scanSource(existingNode.source, existingNode)
 		}
 	}
-
 }
 
 // Acyclic - checks if the graph is acyclic.
@@ -154,4 +199,224 @@ func (i *Instance) cyclic(nodeName string, visited, recStack map[string]bool) bo
 
 	recStack[nodeName] = false
 	return false
+}
+
+// CyclePath returns the ordered list of node names that form the first cycle
+// found during DFS traversal, or nil if the graph is acyclic (FR-11.3.1).
+// The last element connects back to the first, closing the cycle.
+// Example: for A → B → C → A, the return value is ["A", "B", "C", "A"].
+func (i *Instance) CyclePath() []string {
+	visited := make(map[string]bool, len(i.nodes))
+	recStack := make(map[string]bool, len(i.nodes))
+
+	for nodeName := range i.nodes {
+		if !visited[nodeName] {
+			if path := i.cyclicWithPath(nodeName, visited, recStack, nil); path != nil {
+				return path
+			}
+		}
+	}
+
+	return nil
+}
+
+// cyclicWithPath performs DFS to detect cycles, returning the cycle path when
+// found. Shares the same DFS logic as cyclic (FR-11.3.2) but tracks the
+// traversal path to report which nodes form the cycle.
+func (i *Instance) cyclicWithPath(nodeName string, visited, recStack map[string]bool, path []string) []string {
+	visited[nodeName] = true
+	recStack[nodeName] = true
+	path = append(path, nodeName)
+
+	for _, edge := range i.nodes[nodeName].edges {
+		target := edge.to.name
+		if recStack[target] {
+			// Found a cycle. Extract the cycle from the path.
+			cycleStart := -1
+			for idx, name := range path {
+				if name == target {
+					cycleStart = idx
+					break
+				}
+			}
+			if cycleStart >= 0 {
+				cycle := make([]string, len(path[cycleStart:])+1)
+				copy(cycle, path[cycleStart:])
+				cycle[len(cycle)-1] = target // close the cycle
+				return cycle
+			}
+			return []string{target}
+		}
+		if !visited[target] {
+			if result := i.cyclicWithPath(target, visited, recStack, path); result != nil {
+				return result
+			}
+		}
+	}
+
+	recStack[nodeName] = false
+	return nil
+}
+
+// String returns a plain-text, tree-style representation of the dependency
+// graph suitable for terminal output and log files (FR-11.1).
+func (i *Instance) String() string {
+	// FR-11.1.3: Empty graph.
+	if len(i.nodes) == 0 {
+		return "(empty graph)"
+	}
+
+	// Find root nodes: nodes that are not the target of any edge.
+	targets := make(map[string]bool, len(i.nodes))
+	for _, node := range i.nodes {
+		for _, edge := range node.edges {
+			targets[edge.to.name] = true
+		}
+	}
+
+	roots := make([]string, 0)
+	for name := range i.nodes {
+		if !targets[name] {
+			roots = append(roots, name)
+		}
+	}
+
+	// If all nodes are targets (e.g. a pure cycle with no root), list all.
+	if len(roots) == 0 {
+		for name := range i.nodes {
+			roots = append(roots, name)
+		}
+	}
+
+	// FR-11.5.2: Sort roots for deterministic output across calls.
+	sort.Strings(roots)
+
+	var sb strings.Builder
+	expanded := make(map[string]bool, len(i.nodes))
+
+	for idx, rootName := range roots {
+		if idx > 0 {
+			sb.WriteByte('\n')
+		}
+		i.writeTree(&sb, rootName, "", expanded)
+	}
+
+	return sb.String()
+}
+
+// writeTree recursively writes the tree representation for a single node.
+func (i *Instance) writeTree(sb *strings.Builder, nodeName, prefix string, expanded map[string]bool) {
+	node, exists := i.nodes[nodeName]
+	if !exists {
+		return
+	}
+
+	// FR-11.1.2: Mark shared dependencies.
+	if expanded[nodeName] {
+		sb.WriteString(nodeName)
+		sb.WriteString(" (shared)\n")
+		return
+	}
+
+	sb.WriteString(nodeName)
+	sb.WriteByte('\n')
+	expanded[nodeName] = true
+
+	for idx, edge := range node.edges {
+		childIsLast := idx == len(node.edges)-1
+
+		// Write the connector prefix.
+		sb.WriteString(prefix)
+		if childIsLast {
+			sb.WriteString("└── ")
+		} else {
+			sb.WriteString("├── ")
+		}
+
+		// Compute the prefix for the child's subtree.
+		childPrefix := prefix
+		if childIsLast {
+			childPrefix += "    "
+		} else {
+			childPrefix += "│   "
+		}
+
+		i.writeTree(sb, edge.to.name, childPrefix, expanded)
+	}
+}
+
+// ToDot produces a Graphviz DOT representation of the dependency graph
+// (FR-11.2). Cycle edges are highlighted in red when the graph is cyclic
+// (FR-11.2.4).
+func (i *Instance) ToDot() string {
+	var sb strings.Builder
+
+	sb.WriteString("digraph dependencies {\n")
+
+	// FR-11.2.5: Empty graph produces a valid but empty digraph.
+	if len(i.nodes) == 0 {
+		sb.WriteByte('}')
+		return sb.String()
+	}
+
+	// FR-11.2.4: Detect back-edges for cycle highlighting.
+	backEdges := make(map[string]bool)
+	if !i.Acyclic() {
+		visited := make(map[string]bool, len(i.nodes))
+		recStack := make(map[string]bool, len(i.nodes))
+		for nodeName := range i.nodes {
+			if !visited[nodeName] {
+				i.collectBackEdges(nodeName, visited, recStack, backEdges)
+			}
+		}
+	}
+
+	// FR-11.2.2: Emit nodes. Sorted for deterministic output (FR-11.5.2).
+	sortedNames := make([]string, 0, len(i.nodes))
+	for name := range i.nodes {
+		sortedNames = append(sortedNames, name)
+	}
+	sort.Strings(sortedNames)
+
+	for _, name := range sortedNames {
+		sb.WriteString(fmt.Sprintf("  %q;\n", name))
+	}
+
+	// FR-11.2.3: Emit edges. Iterated in sorted node order (FR-11.5.2).
+	for _, name := range sortedNames {
+		node := i.nodes[name]
+		for _, edge := range node.edges {
+			edgeKey := edge.from.name + " -> " + edge.to.name
+			if backEdges[edgeKey] {
+				sb.WriteString(fmt.Sprintf("  %q -> %q [label=%q, color=red];\n",
+					edge.from.name, edge.to.name, edge.dependencyType))
+			} else {
+				sb.WriteString(fmt.Sprintf("  %q -> %q [label=%q];\n",
+					edge.from.name, edge.to.name, edge.dependencyType))
+			}
+		}
+	}
+
+	sb.WriteByte('}')
+	return sb.String()
+}
+
+// collectBackEdges performs DFS and records edges that form back-edges
+// (edges to nodes currently on the recursion stack), used for cycle
+// highlighting in DOT output (FR-11.2.4).
+func (i *Instance) collectBackEdges(nodeName string, visited, recStack map[string]bool, backEdges map[string]bool) {
+	visited[nodeName] = true
+	recStack[nodeName] = true
+
+	for _, edge := range i.nodes[nodeName].edges {
+		target := edge.to.name
+		if recStack[target] {
+			edgeKey := edge.from.name + " -> " + edge.to.name
+			backEdges[edgeKey] = true
+		} else if !visited[target] {
+			i.collectBackEdges(target, visited, recStack, backEdges)
+		}
+	}
+
+	recStack[nodeName] = false
 }

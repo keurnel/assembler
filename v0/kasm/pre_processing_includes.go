@@ -23,6 +23,11 @@ var includeDirectiveRegex = regexp.MustCompile(`(?m)^\s*%include\s+"([^"]+)"\s*$
 //  3. Replace each %include directive with the content of the referenced file,
 //     wrapped in ; FILE: and ; END FILE: comments for traceability.
 func PreProcessingHandleIncludes(source string) (string, []PreProcessingInclusion) {
+	// Early-exit: if the source is empty, skip all processing (AR-8.1).
+	if len(source) == 0 {
+		return source, nil
+	}
+
 	// Early-exit: if the source does not contain %include, skip all processing (AR-8.2).
 	if !strings.Contains(source, "%include") {
 		return source, nil
