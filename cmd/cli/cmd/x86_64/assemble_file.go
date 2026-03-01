@@ -130,7 +130,10 @@ func runAssembleFile(cmd *cobra.Command, args []string) error {
 	// instruction metadata. The instruction table is flattened from all
 	// architecture groups into a single map keyed by upper-case mnemonic.
 	instrTable := buildInstructionTable()
-	semanticErrors := kasm.AnalyserNew(program, instrTable).WithDebugContext(debugCtx).Analyse()
+	semanticErrors := kasm.AnalyserNew(program, instrTable).
+		WithDebugContext(debugCtx).
+		WithLineMapper(tracker).
+		Analyse()
 
 	// Print debug context entries when verbose mode is enabled (semantic phase).
 	if verbose {

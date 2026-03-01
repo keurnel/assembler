@@ -38,6 +38,16 @@ type useDecl struct {
 // Analyser
 // ---------------------------------------------------------------------------
 
+// LineMapper translates a pre-processed line number back to its original line
+// number in the source file before any pre-processing transformations were
+// applied. Implemented by lineMap.Tracker.
+type LineMapper interface {
+	// Origin returns the original 1-based line number for the given
+	// pre-processed line number, or -1 if the line was inserted during
+	// pre-processing (e.g. a ; FILE: boundary comment).
+	Origin(lineNumber int) int
+}
+
 // Analyser validates a *Program AST against the rules of the .kasm language
 // and the target architecture. It detects errors that are syntactically legal
 // but semantically invalid. If an Analyser value exists, it is guaranteed to
@@ -50,6 +60,7 @@ type Analyser struct {
 	modules      map[string]useDecl
 	errors       []SemanticError
 	debugCtx     *debugcontext.DebugContext
+	lineMapper   LineMapper
 }
 
 // AnalyserNew is the sole constructor. It accepts the *Program AST produced by
@@ -82,12 +93,23 @@ func (a *Analyser) WithDebugContext(ctx *debugcontext.DebugContext) *Analyser {
 	return a
 }
 
+// WithLineMapper attaches a LineMapper that translates pre-processed line
+// numbers back to original source line numbers. When set, every error
+// recorded via debugCtx uses the mapped (original) line number instead of
+// the pre-processed one. Returns the analyser for chaining.
+func (a *Analyser) WithLineMapper(m LineMapper) *Analyser {
+	a.lineMapper = m
+	return a
+}
+
 // ---------------------------------------------------------------------------
 // Error recording
 // ---------------------------------------------------------------------------
 
 // addError records a semantic error at the given position. If a debug context
-// is attached, the error is also recorded there.
+// is attached, the error is also recorded there. If a LineMapper is attached,
+// the line number is translated to the original source line before recording
+// in debugCtx.
 func (a *Analyser) addError(message string, line, column int) {
 	a.errors = append(a.errors, SemanticError{
 		Message: message,
@@ -96,7 +118,7 @@ func (a *Analyser) addError(message string, line, column int) {
 	})
 	if a.debugCtx != nil {
 		a.debugCtx.Error(
-			a.debugCtx.Loc(line, column),
+			a.debugCtx.Loc(a.mapLine(line), column),
 			message,
 		)
 	}
@@ -150,11 +172,25 @@ func (a *Analyser) collect() {
 	}
 }
 
+// mapLine translates a 1-based pre-processed line number to its 1-based
+// original source line number using the attached LineMapper. Returns the
+// input unchanged when no mapper is set or the line was inserted during
+// pre-processing.
+func (a *Analyser) mapLine(line int) int {
+	if a.lineMapper == nil {
+		return line
+	}
+	if orig := a.lineMapper.Origin(line - 1); orig >= 0 {
+		return orig + 1
+	}
+	return line
+}
+
 // collectLabel adds a label to the label table or records a duplicate error.
 func (a *Analyser) collectLabel(s *LabelStmt) {
 	if prev, exists := a.labels[s.Name]; exists {
 		a.addError(
-			fmt.Sprintf("duplicate label '%s', previously declared at %d:%d", s.Name, prev.Line, prev.Column),
+			fmt.Sprintf("duplicate label '%s', previously declared at %d:%d", s.Name, a.mapLine(prev.Line), prev.Column),
 			s.Line, s.Column,
 		)
 		return
@@ -166,7 +202,7 @@ func (a *Analyser) collectLabel(s *LabelStmt) {
 func (a *Analyser) collectNamespace(s *NamespaceStmt) {
 	if prev, exists := a.namespaces[s.Name]; exists {
 		a.addError(
-			fmt.Sprintf("duplicate namespace '%s', previously declared at %d:%d", s.Name, prev.Line, prev.Column),
+			fmt.Sprintf("duplicate namespace '%s', previously declared at %d:%d", s.Name, a.mapLine(prev.Line), prev.Column),
 			s.Line, s.Column,
 		)
 		return
@@ -178,7 +214,7 @@ func (a *Analyser) collectNamespace(s *NamespaceStmt) {
 func (a *Analyser) collectUse(s *UseStmt) {
 	if prev, exists := a.modules[s.ModuleName]; exists {
 		a.addError(
-			fmt.Sprintf("duplicate use of module '%s', previously imported at %d:%d", s.ModuleName, prev.Line, prev.Column),
+			fmt.Sprintf("duplicate use of module '%s', previously imported at %d:%d", s.ModuleName, a.mapLine(prev.Line), prev.Column),
 			s.Line, s.Column,
 		)
 		return
