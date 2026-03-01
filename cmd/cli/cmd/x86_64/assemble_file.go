@@ -242,9 +242,12 @@ func preProcessIncludes(source string, tracker *lineMap.Tracker, debugCtx *debug
 
 	dependencyGraph := dependency_graph.New(source, cwd)
 
-	println(dependencyGraph)
+	if !dependencyGraph.Acyclic() {
+		debugCtx.Error(debugCtx.Loc(0, 0), "circular inclusion detected in dependency graph")
+		return source
+	}
 
-	//graph := dependencyGraph.Graph()
+	println(dependencyGraph.Acyclic())
 
 	source, inclusions := kasm.PreProcessingHandleIncludes(source)
 

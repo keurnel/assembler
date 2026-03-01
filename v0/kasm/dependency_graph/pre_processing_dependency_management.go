@@ -41,6 +41,7 @@ func (n *DependencyGraphNode) AddEdge(edge *DependencyGraphEdge) {
 	n.edges = append(n.edges, edge)
 }
 
+// isCyclic - helper function for cycle detection using depth-first search (DFS).
 func (n *DependencyGraphNode) isCyclic(visited, recStack map[string]bool) bool {
 	if !visited[n.name] {
 		// Mark the current node as visited and part of the recursion stack

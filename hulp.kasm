@@ -1,3 +1,5 @@
+%include "main.kasm"
+
 %macro hulp_functie 2
     mov rax, %1
     mov rdi, %2

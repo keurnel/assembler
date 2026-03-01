@@ -3,13 +3,20 @@ package dependency_graph
 import (
 	"fmt"
 	"os"
+	"strings"
 )
 
 var (
 	OsStat = os.Stat
 )
 
+type InstanceMetaData struct {
+}
+
 type Instance struct {
+	// metaData - metadata about the graph (e.g., creation time, source file)
+	metaData *InstanceMetaData
+
 	// cwd - the current working directory for resolving relative paths
 	cwd string
 	// source - original source code
@@ -21,9 +28,10 @@ type Instance struct {
 // New - creates a new instance of the dependency graph.
 func New(source, cwd string) *Instance {
 	instance := Instance{
-		cwd:    cwd,
-		source: source,
-		nodes:  make(map[string]*DependencyGraphNode),
+		metaData: &InstanceMetaData{},
+		cwd:      cwd,
+		source:   source,
+		nodes:    make(map[string]*DependencyGraphNode),
 	}
 
 	// -- FR-1.1.1 - dependency graph receives working directory
@@ -32,6 +40,8 @@ func New(source, cwd string) *Instance {
 	if err != nil {
 		panic(err)
 	}
+
+	instance.build()
 
 	return &instance
 }
@@ -70,6 +80,43 @@ func (i *Instance) AddNode(node *DependencyGraphNode) {
 		return
 	}
 	i.nodes[node.name] = node
+}
+
+// build - builds the dependency graph from the source code.
+func (i *Instance) build() {
+
+	type IncludeDirective struct {
+		relativePath string
+	}
+
+	// Split lines
+	//
+	lines := strings.Split(i.source, "\n")
+
+	// Are the first lines include directives?
+	//
+	for _, line := range lines {
+
+		line = strings.TrimSpace(line)
+
+		// Skip non-include lines.
+		//
+		if !strings.HasPrefix(line, "%include") {
+			continue
+		}
+
+		parts := strings.Fields(line)
+		if len(parts) < 2 {
+			// Invalid include directive, skip.
+			continue
+		}
+
+		directive := parts[0]
+		if directive != "%include" {
+			continue
+		}
+	}
+
 }
 
 // Acyclic - checks if the graph is acyclic.
